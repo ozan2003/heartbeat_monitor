@@ -13,6 +13,16 @@ It contains:
 """
 
 import struct
+from typing import NamedTuple
+
+
+class ICMPHeader(NamedTuple):
+    """Parsed ICMP header information."""
+    type: int
+    code: int
+    checksum: int
+    id: int
+    sequence: int
 
 
 def calculate_checksum(data: bytes) -> int:
@@ -64,7 +74,7 @@ def create_icmp_packet(
     return header + payload
 
 
-def create_echo_request(_id: int, seq: int, *, payload: bytes) -> bytes:
+def create_echo_request(_id: int, seq: int, *, payload: bytes = b"") -> bytes:
     """
     Create an ICMP Echo Request packet.
 
@@ -92,3 +102,51 @@ def create_echo_reply(_id: int, seq: int, *, payload: bytes) -> bytes:
         bytes: The complete ICMP Echo Reply packet (header + payload).
     """
     return create_icmp_packet(0, 0, _id, seq, payload=payload)
+
+
+def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
+    """
+    Parse an ICMP packet into header and payload.
+
+    Args:
+        packet (bytes): The raw ICMP packet data.
+
+    Returns:
+        tuple[ICMPHeader, bytes]: Parsed header and payload data.
+
+    Raises:
+        struct.error: If packet is too short or malformed.
+    """
+    if len(packet) < 8:
+        raise ValueError("ICMP packet too short")
+
+    # Unpack the header: type, code, checksum, id, sequence
+    icmp_type, code, checksum, packet_id, sequence = struct.unpack("!BBHHH", packet[:8])
+
+    header = ICMPHeader(icmp_type, code, checksum, packet_id, sequence)
+    payload = packet[8:]
+
+    return header, payload
+
+
+def verify_checksum(packet: bytes) -> bool:
+    """
+    Verify the checksum of an ICMP packet.
+
+    Args:
+        packet (bytes): The complete ICMP packet.
+
+    Returns:
+        bool: True if checksum is valid, False otherwise.
+    """
+    if len(packet) < 8:
+        return False
+
+    # Extract the checksum from the packet
+    _, _, original_checksum, _, _ = struct.unpack("!BBHHH", packet[:8])
+
+    # Zero out the checksum field and recalculate
+    zeroed_packet = packet[:2] + b'\x00\x00' + packet[4:]
+    calculated_checksum = calculate_checksum(zeroed_packet)
+
+    return original_checksum == calculated_checksum
