@@ -6,7 +6,7 @@ and opens raw ICMP socket.
 
 In a loop:
 
-    - Sends ICMP Echo Request to each server (uses icmp_packet.py)
+    - Sends ICMP Echo Request to each server
 
     - Waits for reply with timeout
 
@@ -18,5 +18,4 @@ In a loop:
 
 
 It also handles timeouts (server down/unreachable).
-
 """
