@@ -12,9 +12,9 @@ import struct
 import time
 from typing import Any, NamedTuple
 
-from health import HealthData
+from health_stats import HealthData
 
-VERSION = 1
+VERSION = 1  # Protocol version for payload format
 MAGIC = b"HBM1"  # Magic bytes to identify our protocol in payload
 
 
@@ -171,7 +171,7 @@ def encode_health_data(
     """
     Encode health metrics into binary payload format using struct.pack.
 
-    Binary format (29 bytes total):
+    Binary format:
         - Magic bytes (4 bytes): 'HBM1' - identifies our protocol
         - Version (1 byte): Protocol version (currently 1)
         - Timestamp (8 bytes double): Unix timestamp when data was gathered
@@ -246,8 +246,10 @@ def decode_health_data(payload: bytes) -> HealthData:
     )
 
     # Verify magic bytes and version
-    if magic != MAGIC or version != VERSION:
-        raise ValueError("Invalid magic bytes or version")
+    if magic != MAGIC:
+        raise ValueError("Invalid magic bytes")
+    if version != VERSION:
+        raise ValueError("Invalid version")
 
     return HealthData(
         timestamp=timestamp,

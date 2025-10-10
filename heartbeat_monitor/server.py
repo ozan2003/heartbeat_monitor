@@ -21,7 +21,7 @@ import contextlib
 import socket
 from typing import Any
 
-from health import get_basic_health
+from health_stats import get_basic_health
 from icmp_utils import (
     create_echo_reply,
     encode_health_data,
@@ -77,7 +77,7 @@ class ICMPServer:
                 try:
                     header, _payload = parse_icmp_packet(frame)
                 except (ValueError, OSError):
-                    continue # Malformed packet, ignore
+                    continue  # Malformed packet, ignore
 
                 if header.type != ICMP_ECHO_REQUEST:
                     # Not an echo request
@@ -99,21 +99,30 @@ class ICMPServer:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse CLI arguments for the ICMP server."""
-    p = argparse.ArgumentParser(description="ICMP health server (requires root)")
+    """
+    Parse CLI arguments for the ICMP server.
 
-    p.add_argument("--bind", default=None, help="Bind to specific IP (optional)")
+    Returns:
+        argparse.Namespace: Parsed arguments
+    """
+    parser = argparse.ArgumentParser(
+        description="ICMP health server",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="This program requires root privileges to run.",
+    )
 
-    return p.parse_args()
+    parser.add_argument("--bind", default=None, help="Bind to specific IP (optional)")
+
+    return parser.parse_args()
 
 
 def main() -> None:
-    """Start the ICMP health server and run forever."""
+    """Entry point for the script."""
     args = parse_args()
 
     server = ICMPServer(bind_addr=args.bind)
 
-    print("ICMP server listening; run with root privileges.")
+    print("ICMP server listening.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
