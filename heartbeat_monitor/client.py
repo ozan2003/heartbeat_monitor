@@ -9,7 +9,7 @@ In a loop:
     - Sends ICMP Echo Request to each server
     - Waits for reply with timeout
     - Parses reply to extract health metrics
-    - Displays current status (console output initially)
+    - Displays current status (or saves to file/db)
     - Sleeps for poll interval (like 10 seconds)
 
 
@@ -48,6 +48,7 @@ class ICMPClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
         # Some platforms support setting receive timeout on socket
         self.sock.settimeout(self.timeout)
+        # pid is unsigned 16-bit int, any excess bits are shaved off
         self.pid = os.getpid() & 0xFFFF
         self.seq = 0
 
@@ -57,13 +58,17 @@ class ICMPClient:
             self.sock.close()
 
     def _next_seq(self) -> int:
-        self.seq = (self.seq + 1) & 0xFFFF
+        self.seq = (self.seq + 1) & 0xFFFF  # truncate to 16 bits
         return self.seq
 
     def ping_once(self, host: str) -> tuple[bool, float | None, dict[str, Any]]:
         """Send one Echo Request to host and wait for Echo Reply.
 
-        Returns (ok, rtt_sec, metrics_dict)
+        Returns `(ok, rtt_sec, metrics_dict)`
+
+        - ok: True if we got a valid reply, False on timeout or error
+        - rtt_sec: Round-trip time in seconds, or None on timeout/error
+        - metrics_dict: Parsed health metrics from the reply payload, empty if none
         """
         seq = self._next_seq()
         payload = b""  # server fills health metrics in the reply payload
@@ -119,7 +124,13 @@ class ICMPClient:
             return True, rtt, metrics
 
     def loop(self, hosts: list[str], interval: float, count: int | None) -> None:
-        """Continuously ping provided hosts with an interval and print results."""
+        """Continuously ping provided hosts with an interval and print results.
+
+        Args:
+            hosts: List of target hostnames or IP addresses to ping.
+            interval: Seconds to wait between each round of pings. If 0, pings continuously without delay.
+            count: Number of ping rounds to perform. If None, runs indefinitely until interrupted.
+        """
         sent = 0
         try:
             while True:

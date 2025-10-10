@@ -32,6 +32,12 @@ def calculate_checksum(data: bytes) -> int:
     """
     Calculate the ICMP checksum for the given data using one's-complement
     16-bit summation with proper carry folding.
+
+    Args:
+        data (bytes): The data over which to calculate the checksum.
+
+    Returns:
+        int: The computed checksum as a 16-bit integer.
     """
     # If odd length, pad with one zero byte for 16-bit processing
     if len(data) % 2 == 1:
@@ -140,7 +146,11 @@ def verify_checksum(packet: bytes) -> bool:
     Verify the checksum of an ICMP packet by zeroing the checksum field
     and recomputing over the whole ICMP message.
 
-    Returns True when the recalculated checksum equals the original.
+    Args:
+        packet (bytes): The raw ICMP packet data.
+
+    Returns:
+        bool: True if checksum is valid, False otherwise.
     """
     if len(packet) < 8:
         return False
@@ -171,21 +181,21 @@ def encode_health_data(
         - Disk percent (4 bytes float): Disk usage percentage
 
     Format string: '!4sBdffff'
-        ! = network byte order (big-endian)
-        4s = 4 bytes string (magic)
-        B = 1 byte unsigned char (version)
-        d = 8 bytes double (timestamp)
-        f = 4 bytes float (cpu)
-        f = 4 bytes float (memory percent)
-        f = 4 bytes float (memory available)
-        f = 4 bytes float (disk)
+        - ! = network byte order (big-endian)
+        - 4s = 4 bytes string (magic)
+        - B = 1 byte unsigned char (version)
+        - d = 8 bytes double (timestamp)
+        - f = 4 bytes float (cpu)
+        - f = 4 bytes float (memory percent)
+        - f = 4 bytes float (memory available)
+        - f = 4 bytes float (disk)
 
     Args:
-        health_dict: Dictionary containing health metrics from get_basic_health()
-        timestamp: Optional timestamp (uses current time if None)
+        health_dict: Dictionary containing health metrics from `get_basic_health()`
+        timestamp: Optional timestamp (uses current time if `None`)
 
     Returns:
-        bytes: Binary encoded health data (29 bytes)
+        bytes: Binary encoded health data
     """
 
     if timestamp is None:
@@ -249,11 +259,35 @@ def decode_health_data(payload: bytes) -> HealthData:
 
 
 def strip_ipv4_header_if_present(data: bytes) -> bytes:
-    """If data contains an IPv4 header (from raw sockets), strip it.
+    """
+    Return the ICMP segment, stripping an IPv4 header if one is present.
 
-    Linux raw ICMP sockets often include the IPv4 header on recv().
-    Datagram (ping) sockets return ICMP without IP header. This helper
-    makes code robust to both.
+    Why:
+        On many Linux kernels, reading from a raw ICMP socket (AF_INET, SOCK_RAW,
+        IPPROTO_ICMP) yields the entire IPv4 packet (IP header + ICMP). Other
+        platforms or socket types (e.g., datagram "ping" sockets) return only
+        the ICMP message. This helper normalizes both cases so downstream code
+        can always parse a bare ICMP header.
+
+    How:
+        - Detect IPv4 by checking the version nibble (data[0] >> 4 == 4).
+        - Compute the Internet Header Length (IHL) from the low nibble and
+          convert it to bytes (ihl = (data[0] & 0x0F) * 4).
+        - If the buffer is at least IHL + 8 bytes (enough for IP + ICMP header),
+          slice off the IP header and return data[ihl:].
+        - Otherwise, or if not IPv4, return the input unchanged.
+
+    Notes:
+        - No IPv4 checksum or total-length validation is performed—only a
+          minimal structural check.
+        - IPv6 frames (version 6) and already-ICMP-only buffers are untouched.
+
+    Args:
+        data: Bytes received from a socket (potentially IP+ICMP).
+
+    Returns:
+        Bytes that begin at the ICMP header (type/code) if an IPv4 header was
+        present and could be stripped; otherwise the original data.
     """
     if len(data) >= 20 and (data[0] >> 4) == 4:
         ihl = (data[0] & 0x0F) * 4

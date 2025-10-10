@@ -38,6 +38,12 @@ class ICMPServer:
     """Simple ICMP echo server that replies with encoded health metrics."""
 
     def __init__(self, bind_addr: str | None = None) -> None:
+        """
+        Initialize ICMP server socket.
+
+        Args:
+            bind_addr: Optional IP address to bind to (default: all interfaces)
+        """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
         # Binding on raw sockets filters received packets by dst IP on some OSes.
         if bind_addr:
@@ -95,7 +101,9 @@ class ICMPServer:
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the ICMP server."""
     p = argparse.ArgumentParser(description="ICMP health server (requires root)")
+
     p.add_argument("--bind", default=None, help="Bind to specific IP (optional)")
+
     return p.parse_args()
 
 

@@ -31,14 +31,24 @@ class HealthData(NamedTuple):
 
 
 def get_cpu_percent() -> float:
-    """Get current CPU usage percentage without blocking."""
+    """
+    Get current CPU usage percentage without blocking.
+
+    Returns:
+        CPU usage percentage (0.0 to 100.0)
+    """
     # interval=0.0 returns the current value immediately (no 1s sleep)
     # On the very first call it may return 0.0 which is acceptable for a heartbeat.
     return psutil.cpu_percent(interval=0.0)
 
 
 def get_memory_info() -> dict[str, int | float]:
-    """Get memory usage information."""
+    """
+    Get memory usage information.
+
+    Returns:
+        Dict containing total, available, used memory in bytes and usage percent.
+    """
     memory = psutil.virtual_memory()
     return {
         "total": memory.total,
@@ -49,7 +59,12 @@ def get_memory_info() -> dict[str, int | float]:
 
 
 def get_disk_info() -> dict[str, int | float]:
-    """Get disk usage information for root partition."""
+    """
+    Get disk usage information for root partition.
+
+    Returns:
+        Dict containing total, used, free space in bytes and usage percent.
+    """
     disk = psutil.disk_usage("/")
     return {
         "total": disk.total,
