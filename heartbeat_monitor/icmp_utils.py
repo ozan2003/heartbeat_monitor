@@ -13,11 +13,15 @@ It contains:
 """
 
 import struct
-from typing import NamedTuple
+import time
+from typing import Any, NamedTuple
+
+from health import HealthData
 
 
 class ICMPHeader(NamedTuple):
     """Parsed ICMP header information."""
+
     type: int
     code: int
     checksum: int
@@ -146,7 +150,119 @@ def verify_checksum(packet: bytes) -> bool:
     _, _, original_checksum, _, _ = struct.unpack("!BBHHH", packet[:8])
 
     # Zero out the checksum field and recalculate
-    zeroed_packet = packet[:2] + b'\x00\x00' + packet[4:]
+    zeroed_packet = packet[:2] + b"\x00\x00" + packet[4:]
     calculated_checksum = calculate_checksum(zeroed_packet)
 
     return original_checksum == calculated_checksum
+
+
+def encode_health_data(health_dict: dict[str, Any], *, timestamp: float | None = None) -> bytes:
+    """
+    Encode health metrics into binary payload format using struct.pack.
+
+    Binary format (25 bytes total):
+        - Magic bytes (4 bytes): 'HBM1' - identifies our protocol
+        - Version (1 byte): Protocol version (currently 1)
+        - Timestamp (8 bytes double): Unix timestamp when data was gathered
+        - CPU percent (4 bytes float): CPU usage percentage
+        - Memory percent (4 bytes float): Memory usage percentage
+        - Memory available MB (4 bytes float): Available memory in MB
+        - Disk percent (4 bytes float): Disk usage percentage
+
+    Format string: '!4sBdffff'
+        ! = network byte order (big-endian)
+        4s = 4 bytes string (magic)
+        B = 1 byte unsigned char (version)
+        d = 8 bytes double (timestamp)
+        f = 4 bytes float (cpu)
+        f = 4 bytes float (memory percent)
+        f = 4 bytes float (memory available)
+        f = 4 bytes float (disk)
+
+    Args:
+        health_dict: Dictionary containing health metrics from get_basic_health()
+        timestamp: Optional timestamp (uses current time if None)
+
+    Returns:
+        bytes: Binary encoded health data (29 bytes)
+    """
+    MAGIC = b"HBM1"
+    VERSION = 1
+
+    if timestamp is None:
+        timestamp = time.time()
+
+    cpu_percent = health_dict["cpu_percent"]
+    memory_percent = health_dict["memory"]["percent"]
+    memory_available_mb = health_dict["memory"]["available"] / (1024 * 1024)
+    disk_percent = health_dict["disk"]["percent"]
+
+    # Pack: magic(4s) + version(B) + timestamp(d) + 4 floats(ffff)
+    payload = struct.pack(
+        "!4sBdffff",
+        MAGIC,
+        VERSION,
+        timestamp,
+        cpu_percent,
+        memory_percent,
+        memory_available_mb,
+        disk_percent,
+    )
+
+    return payload
+
+
+def decode_health_data(payload: bytes) -> HealthData | None:
+    """
+    Decode health metrics from binary payload.
+
+    Args:
+        payload: Binary payload from ICMP packet
+
+    Returns:
+        HealthData namedtuple with metrics, or None if invalid
+    """
+    MAGIC = b"HBM1"
+    EXPECTED_SIZE = 29  # 4 + 1 + 8 + 4*4 = 29 bytes
+
+    # Check minimum size
+    if len(payload) < EXPECTED_SIZE:
+        return None
+
+    try:
+        # Unpack the binary data
+        magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = struct.unpack(
+            "!4sBdffff", payload[:EXPECTED_SIZE]
+        )
+
+        # Verify magic bytes
+        if magic != MAGIC:
+            return None
+
+        # Check version
+        if version != 1:
+            return None
+
+        return HealthData(
+            timestamp=timestamp,
+            cpu_percent=cpu,
+            memory_percent=mem_percent,
+            memory_available_mb=mem_avail_mb,
+            disk_percent=disk,
+        )
+    except struct.error:
+        return None
+
+
+def strip_ipv4_header_if_present(data: bytes) -> bytes:
+    """If data contains an IPv4 header (from raw sockets), strip it.
+
+    Linux raw ICMP sockets often include the IPv4 header on recv().
+    Datagram (ping) sockets return ICMP without IP header. This helper
+    makes code robust to both.
+    """
+    if len(data) >= 20 and (data[0] >> 4) == 4:
+        ihl = (data[0] & 0x0F) * 4
+        if len(data) >= ihl + 8:  # at least IP + ICMP header
+            return data[ihl:]
+    return data

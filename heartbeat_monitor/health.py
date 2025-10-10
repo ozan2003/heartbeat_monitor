@@ -10,9 +10,19 @@ It does:
     - Returns current health metrics
 """
 
-from typing import Any
+from typing import Any, NamedTuple
 
 import psutil
+
+
+class HealthData(NamedTuple):
+    """System health metrics."""
+
+    timestamp: float
+    cpu_percent: float
+    memory_percent: float
+    memory_available_mb: float
+    disk_percent: float
 
 
 def get_cpu_percent() -> float:
