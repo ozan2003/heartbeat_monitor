@@ -246,7 +246,7 @@ def decode_health_data(payload: bytes) -> HealthData:
     )
 
     # Verify magic bytes and version
-    if magic != MAGIC or version != 1:
+    if magic != MAGIC or version != VERSION:
         raise ValueError("Invalid magic bytes or version")
 
     return HealthData(
