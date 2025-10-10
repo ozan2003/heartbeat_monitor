@@ -36,7 +36,7 @@ from icmp_utils import (
 
 ICMP_PROTO = socket.IPPROTO_ICMP
 ICMP_ECHO_REPLY = 0
-DEFAULT_TIMEOUT = 1.0
+DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 
 
 class ICMPClient:
@@ -58,61 +58,85 @@ class ICMPClient:
             self.sock.close()
 
     def _next_seq(self) -> int:
+        """
+        Get the next sequence number (16-bit unsigned int).
+
+        Wraps around to 0 after reaching 65535.
+
+        Returns:
+            int: Next sequence number
+        """
         self.seq = (self.seq + 1) & 0xFFFF  # truncate to 16 bits
         return self.seq
 
     def ping_once(self, host: str) -> tuple[bool, float | None, dict[str, Any]]:
-        """Send one Echo Request to host and wait for Echo Reply.
+        """
+        Send one Echo Request to host and wait for Echo Reply.
 
-        Returns `(ok, rtt_sec, metrics_dict)`
+        Args:
+            host: Target hostname or IP address to ping.
 
-        - ok: True if we got a valid reply, False on timeout or error
-        - rtt_sec: Round-trip time in seconds, or None on timeout/error
-        - metrics_dict: Parsed health metrics from the reply payload, empty if none
+        Returns:
+            tuple: `(ok, rtt_sec, metrics_dict)`
+            - ok: True if we got a valid reply, False on timeout or error
+            - rtt_sec: Round-trip time in seconds, or None on timeout/error
+            - metrics_dict: Parsed health metrics from the reply payload, empty if none
         """
         seq = self._next_seq()
-        payload = b""  # server fills health metrics in the reply payload
-        packet = create_echo_request(self.pid, seq, payload=payload)
+        # Without payload
+        packet = create_echo_request(self.pid, seq)
 
         addr = (socket.gethostbyname(host), 0)
         start = time.monotonic()
         self.sock.sendto(packet, addr)
 
-        # Wait for reply using select to support per-packet timeout
+        deadline = start + self.timeout  # Absolute deadline
+
         while True:
-            remaining = self.timeout - (time.monotonic() - start)
+            remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return False, None, {}
-            r, _, _ = select.select([self.sock], [], [], remaining)
-            if not r:
+                # True timeout - we've exceeded our deadline
                 return False, None, {}
 
-            data, src = self.sock.recvfrom(65535)
+            # Wait for socket to become readable
+            ready = select.select([self.sock], [], [], remaining)[0]
+            if not ready:
+                # select() timed out (shouldn't happen if remaining > 0, but just in case)
+                return False, None, {}
+
+            # Socket is readable, receive data
+            try:
+                data, src = self.sock.recvfrom(65535)
+            except OSError:
+                continue  # Ignore socket errors, keep trying until deadline
+
+            # Filter by source IP
             if src[0] != addr[0]:
-                # Not from our target host
                 continue
 
+            # Strip IP header if present
             data = strip_ipv4_header_if_present(data)
             if len(data) < 8:
                 continue
 
-            # Parse ICMP header/payload (be strict about structure only)
+            # Parse ICMP packet
             try:
                 header, payload = parse_icmp_packet(data)
             except (ValueError, struct.error):
                 continue
 
+            # Check if it's our Echo Reply
             if header.type != ICMP_ECHO_REPLY:
-                continue  # Not an echo reply, we're not interested
+                continue
             if header.id != self.pid or header.sequence != seq:
-                continue  # Not our request
+                continue
 
+            # Valid reply, calculate RTT
             rtt = time.monotonic() - start
-            try:
-                hd = decode_health_data(payload)
-            except ValueError:
-                # Kernel echo reply without our payload: treat as liveness (no metrics)
-                return True, rtt, {}
+
+            # Decode health data
+            hd = decode_health_data(payload)
+
             metrics: dict[str, Any] = {
                 "cpu_percent": hd.cpu_percent,
                 "memory": {
@@ -131,10 +155,10 @@ class ICMPClient:
             interval: Seconds to wait between each round of pings. If 0, pings continuously without delay.
             count: Number of ping rounds to perform. If None, runs indefinitely until interrupted.
         """
-        sent = 0
+        pings_sent = 0
         try:
             while True:
-                if count is not None and sent >= count:
+                if count is not None and pings_sent >= count:
                     break
                 for host in hosts:
                     ok, rtt, metrics = self.ping_once(host)
@@ -150,12 +174,14 @@ class ICMPClient:
                             if isinstance(metrics.get("disk"), dict)
                             else None
                         )
-                        rtt_ms = f"{(rtt or 0) * 1000:.2f}ms"
-                        print(f"{host} reply: rtt={rtt_ms} {cpu=:.6f}% {mem=:.6f}% {disk=:.6f}%")
+                        rtt = f"{(rtt or 0) * 1000:.2f}ms"
+                        print(
+                            f"{host} reply: {rtt=} {cpu=:.6f}% {mem=:.6f}% {disk=:.6f}%"
+                        )
                     else:
                         print(f"{host} request timed out")
                     time.sleep(0.01)  # tiny spacing between hosts
-                sent += 1
+                pings_sent += 1
                 if interval > 0:
                     time.sleep(interval)
         except KeyboardInterrupt:
@@ -165,26 +191,34 @@ class ICMPClient:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse CLI args for the ICMP client."""
-    p = argparse.ArgumentParser(
+    """
+    Parse CLI args for the ICMP client.
+
+    Returns:
+        argparse.Namespace: Parsed arguments
+    """
+    parser = argparse.ArgumentParser(
         description="ICMP health monitoring client",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="This program requires root privileges to run.",
     )
-    p.add_argument("hosts", nargs="*", default=["127.0.0.1"], help="Target hosts/IPs")
-    p.add_argument(
+    parser.add_argument(
+        "hosts", nargs="*", default=["127.0.0.1"], help="Target hosts/IPs"
+    )
+    parser.add_argument(
         "-i", "--interval", type=float, default=5.0, help="Probe interval seconds"
     )
-    p.add_argument(
+    parser.add_argument(
         "-c", "--count", type=int, default=0, help="Number of probe rounds (0=infinite)"
     )
-    p.add_argument(
+    parser.add_argument(
         "-W",
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT,
         help="Per-request timeout seconds",
     )
-    return p.parse_args()
+    return parser.parse_args()
 
 
 def main() -> None:
