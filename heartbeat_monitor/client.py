@@ -150,8 +150,8 @@ class ICMPClient:
                             if isinstance(metrics.get("disk"), dict)
                             else None
                         )
-                        rtt_ms = f"{(rtt or 0) * 1000:.1f}ms"
-                        print(f"{host} reply: rtt={rtt_ms} {cpu=}% {mem=}% {disk=}%")
+                        rtt_ms = f"{(rtt or 0) * 1000:.2f}ms"
+                        print(f"{host} reply: rtt={rtt_ms} {cpu=:.6f}% {mem=:.6f}% {disk=:.6f}%")
                     else:
                         print(f"{host} request timed out")
                     time.sleep(0.01)  # tiny spacing between hosts
