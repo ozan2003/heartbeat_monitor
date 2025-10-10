@@ -28,6 +28,7 @@ import contextlib
 import os
 import select
 import socket
+import struct
 import time
 from typing import Any
 
@@ -36,7 +37,6 @@ from icmp_utils import (
     decode_health_data,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
-    verify_checksum,
 )
 
 ICMP_PROTO = socket.IPPROTO_ICMP
@@ -96,24 +96,29 @@ class ICMPClient:
             if len(data) < 8:
                 continue
 
-            if not verify_checksum(data):
+            # Parse ICMP header/payload (be strict about structure only)
+            try:
+                header, payload = parse_icmp_packet(data)
+            except (ValueError, struct.error):
                 continue
 
-            header, payload = parse_icmp_packet(data)
             if header.type != ICMP_ECHO_REPLY:
-                # Not an echo reply
                 continue
             if header.id != self.pid or header.sequence != seq:
-                # Not our reply
                 continue
 
             rtt = time.monotonic() - start
-            hd = decode_health_data(payload)
-            if hd is None:
+            try:
+                hd = decode_health_data(payload)
+            except ValueError:
+                # Kernel echo reply without our payload: treat as liveness (no metrics)
                 return True, rtt, {}
             metrics: dict[str, Any] = {
                 "cpu_percent": hd.cpu_percent,
-                "memory": {"percent": hd.memory_percent, "available_mb": hd.memory_available_mb},
+                "memory": {
+                    "percent": hd.memory_percent,
+                    "available_mb": hd.memory_available_mb,
+                },
                 "disk": {"percent": hd.disk_percent},
             }
             return True, rtt, metrics
@@ -139,10 +144,8 @@ class ICMPClient:
                             if isinstance(metrics.get("disk"), dict)
                             else None
                         )
-                        rtt_ms = f"{(rtt or 0) * 1000:.1f} ms"
-                        print(
-                            f"{host} reply: rtt={rtt_ms} cpu={cpu}% mem={mem}% disk={disk}%"
-                        )
+                        rtt_ms = f"{(rtt or 0) * 1000:.1f}ms"
+                        print(f"{host} reply: rtt={rtt_ms} {cpu=}% {mem=}% {disk=}%")
                     else:
                         print(f"{host} request timed out")
                     time.sleep(0.01)  # tiny spacing between hosts

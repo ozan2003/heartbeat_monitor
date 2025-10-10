@@ -31,21 +31,24 @@ class ICMPHeader(NamedTuple):
 
 def calculate_checksum(data: bytes) -> int:
     """
-    Calculate the ICMP checksum for the given data.
-
-    Args:
-        data (bytes): The data over which to calculate the checksum.
-
-    Returns:
-        int: The calculated checksum as a 16-bit integer.
+    Calculate the ICMP checksum for the given data using one's-complement
+    16-bit summation with proper carry folding.
     """
+    # If odd length, pad with one zero byte for 16-bit processing
+    if len(data) % 2 == 1:
+        data += b"\x00"
+
     s = 0
     for i in range(0, len(data), 2):
-        w = (data[i] << 8) + (data[i + 1] if i + 1 < len(data) else 0)
-        s = s + w
-    s = (s >> 16) + (s & 0xFFFF)
-    s = ~s & 0xFFFF
-    return s
+        w = (data[i] << 8) + data[i + 1]
+        s += w
+        # fold carry at each step to avoid overflow
+        s = (s & 0xFFFF) + (s >> 16)
+
+    # final fold in case a carry remains
+    s = (s & 0xFFFF) + (s >> 16)
+
+    return (~s) & 0xFFFF
 
 
 def create_icmp_packet(
@@ -135,32 +138,31 @@ def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
 
 def verify_checksum(packet: bytes) -> bool:
     """
-    Verify the checksum of an ICMP packet.
+    Verify the checksum of an ICMP packet by zeroing the checksum field
+    and recomputing over the whole ICMP message.
 
-    Args:
-        packet (bytes): The complete ICMP packet.
-
-    Returns:
-        bool: True if checksum is valid, False otherwise.
+    Returns True when the recalculated checksum equals the original.
     """
     if len(packet) < 8:
         return False
 
-    # Extract the checksum from the packet
-    _, _, original_checksum, _, _ = struct.unpack("!BBHHH", packet[:8])
+    try:
+        _t, _c, original, _id, _seq = struct.unpack("!BBHHH", packet[:8])
+    except struct.error:
+        return False
 
-    # Zero out the checksum field and recalculate
-    zeroed_packet = packet[:2] + b"\x00\x00" + packet[4:]
-    calculated_checksum = calculate_checksum(zeroed_packet)
-
-    return original_checksum == calculated_checksum
+    zeroed = packet[:2] + b"\x00\x00" + packet[4:]
+    calc = calculate_checksum(zeroed)
+    return calc == original
 
 
-def encode_health_data(health_dict: dict[str, Any], *, timestamp: float | None = None) -> bytes:
+def encode_health_data(
+    health_dict: dict[str, Any], *, timestamp: float | None = None
+) -> bytes:
     """
     Encode health metrics into binary payload format using struct.pack.
 
-    Binary format (25 bytes total):
+    Binary format (29 bytes total):
         - Magic bytes (4 bytes): 'HBM1' - identifies our protocol
         - Version (1 byte): Protocol version (currently 1)
         - Timestamp (8 bytes double): Unix timestamp when data was gathered
@@ -212,7 +214,7 @@ def encode_health_data(health_dict: dict[str, Any], *, timestamp: float | None =
     return payload
 
 
-def decode_health_data(payload: bytes) -> HealthData | None:
+def decode_health_data(payload: bytes) -> HealthData:
     """
     Decode health metrics from binary payload.
 
@@ -220,38 +222,31 @@ def decode_health_data(payload: bytes) -> HealthData | None:
         payload: Binary payload from ICMP packet
 
     Returns:
-        HealthData namedtuple with metrics, or None if invalid
+        HealthData namedtuple with metrics
     """
     MAGIC = b"HBM1"
     EXPECTED_SIZE = 29  # 4 + 1 + 8 + 4*4 = 29 bytes
 
     # Check minimum size
     if len(payload) < EXPECTED_SIZE:
-        return None
+        raise ValueError("Invalid payload size")
 
-    try:
-        # Unpack the binary data
-        magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = struct.unpack(
-            "!4sBdffff", payload[:EXPECTED_SIZE]
-        )
+    # Unpack the binary data
+    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = struct.unpack(
+        "!4sBdffff", payload[:EXPECTED_SIZE]
+    )
 
-        # Verify magic bytes
-        if magic != MAGIC:
-            return None
+    # Verify magic bytes and version
+    if magic != MAGIC or version != 1:
+        raise ValueError("Invalid magic bytes or version")
 
-        # Check version
-        if version != 1:
-            return None
-
-        return HealthData(
-            timestamp=timestamp,
-            cpu_percent=cpu,
-            memory_percent=mem_percent,
-            memory_available_mb=mem_avail_mb,
-            disk_percent=disk,
-        )
-    except struct.error:
-        return None
+    return HealthData(
+        timestamp=timestamp,
+        cpu_percent=cpu,
+        memory_percent=mem_percent,
+        memory_available_mb=mem_avail_mb,
+        disk_percent=disk,
+    )
 
 
 def strip_ipv4_header_if_present(data: bytes) -> bytes:
