@@ -6,13 +6,9 @@ It opens a ICMP socket, listens in an infinite loop for
 incoming ICMP Echo Request packets.
 
 When it receives a request:
-
     - Parses the packet (extract id, sequence number, any payload)
-
     - Gathers system health metrics (calls functions from health.py)
-
     - Builds ICMP Echo Reply with health data in payload (uses icmp_packet.py)
-
     - Sends reply back to client
 
 It also handles errors (malformed packets, socket errors).
@@ -89,6 +85,7 @@ class ICMPServer:
                 reply = create_echo_reply(header.id, header.sequence, payload=payload)
 
                 # Send back to the source of the request
+                # Any OSError here (e.g. network unreachable) is ignored
                 with contextlib.suppress(OSError):
                     self.sock.sendto(reply, (src_ip, 0))
         finally:
@@ -105,7 +102,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Start the ICMP health server and run forever."""
     args = parse_args()
+
     server = ICMPServer(bind_addr=args.bind)
+
     print("ICMP server listening; run with root privileges.")
     try:
         server.serve_forever()

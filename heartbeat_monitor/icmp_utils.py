@@ -2,13 +2,9 @@
 Shared utilities for ICMP packet manipulation.
 
 It contains:
-
     - Functions to build ICMP packets (header + payload)
-
     - Functions to parse received ICMP packets
-
     - Calculate ICMP checksum (critical - packets rejected if wrong)
-
     - Encode/decode custom payload format
 """
 
@@ -17,6 +13,9 @@ import time
 from typing import Any, NamedTuple
 
 from health import HealthData
+
+VERSION = 1
+MAGIC = b"HBM1"  # Magic bytes to identify our protocol in payload
 
 
 class ICMPHeader(NamedTuple):
@@ -188,8 +187,6 @@ def encode_health_data(
     Returns:
         bytes: Binary encoded health data (29 bytes)
     """
-    MAGIC = b"HBM1"
-    VERSION = 1
 
     if timestamp is None:
         timestamp = time.time()
@@ -223,17 +220,19 @@ def decode_health_data(payload: bytes) -> HealthData:
 
     Returns:
         HealthData namedtuple with metrics
+
+    Raises:
+        ValueError: If payload is invalid (wrong size, magic bytes, or version)
     """
-    MAGIC = b"HBM1"
-    EXPECTED_SIZE = 29  # 4 + 1 + 8 + 4*4 = 29 bytes
+    expected_size = struct.calcsize("!4sBdffff")
 
     # Check minimum size
-    if len(payload) < EXPECTED_SIZE:
+    if len(payload) < expected_size:
         raise ValueError("Invalid payload size")
 
     # Unpack the binary data
     magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = struct.unpack(
-        "!4sBdffff", payload[:EXPECTED_SIZE]
+        "!4sBdffff", payload[:expected_size]
     )
 
     # Verify magic bytes and version

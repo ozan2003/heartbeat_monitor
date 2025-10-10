@@ -6,15 +6,10 @@ Reads server list from config (or hardcoded initially)
 and opens raw ICMP socket.
 
 In a loop:
-
     - Sends ICMP Echo Request to each server
-
     - Waits for reply with timeout
-
     - Parses reply to extract health metrics
-
     - Displays current status (console output initially)
-
     - Sleeps for poll interval (like 10 seconds)
 
 
@@ -103,9 +98,9 @@ class ICMPClient:
                 continue
 
             if header.type != ICMP_ECHO_REPLY:
-                continue
+                continue  # Not an echo reply, we're not interested
             if header.id != self.pid or header.sequence != seq:
-                continue
+                continue  # Not our request
 
             rtt = time.monotonic() - start
             try:
@@ -160,7 +155,10 @@ class ICMPClient:
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI args for the ICMP client."""
-    p = argparse.ArgumentParser(description="ICMP health monitoring client")
+    p = argparse.ArgumentParser(
+        description="ICMP health monitoring client",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     p.add_argument("hosts", nargs="*", default=["127.0.0.1"], help="Target hosts/IPs")
     p.add_argument(
         "-i", "--interval", type=float, default=5.0, help="Probe interval seconds"
@@ -181,9 +179,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Entry point for the ICMP client."""
     args = parse_args()
+
     count = None if args.count == 0 else max(0, int(args.count))
+
     client = ICMPClient(timeout=float(args.timeout))
-    print("ICMP client started (requires root). Probing:", ", ".join(args.hosts))
+    print("ICMP client started\nProbing:", ", ".join(args.hosts))
+
     client.loop(args.hosts, float(args.interval), count)
 
 

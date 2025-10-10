@@ -2,11 +2,8 @@
 Gather system health metrics from the OS.
 
 It does:
-
     - Get system stats.
-
     - Abstracts OS differences (psutil handles cross-platform)
-
     - Returns current health metrics
 """
 
@@ -16,7 +13,15 @@ import psutil
 
 
 class HealthData(NamedTuple):
-    """System health metrics."""
+    """System health metrics.
+
+    Attributes:
+        timestamp: Time when metrics were gathered (epoch seconds)
+        cpu_percent: CPU usage percentage
+        memory_percent: Memory usage percentage
+        memory_available_mb: Available memory in megabytes
+        disk_percent: Disk usage percentage for root partition
+    """
 
     timestamp: float
     cpu_percent: float
@@ -32,7 +37,7 @@ def get_cpu_percent() -> float:
     return psutil.cpu_percent(interval=0.0)
 
 
-def get_memory_info() -> dict[str, Any]:
+def get_memory_info() -> dict[str, int | float]:
     """Get memory usage information."""
     memory = psutil.virtual_memory()
     return {
@@ -43,7 +48,7 @@ def get_memory_info() -> dict[str, Any]:
     }
 
 
-def get_disk_info() -> dict[str, Any]:
+def get_disk_info() -> dict[str, int | float]:
     """Get disk usage information for root partition."""
     disk = psutil.disk_usage("/")
     return {
