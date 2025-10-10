@@ -77,7 +77,7 @@ class ICMPServer:
                 try:
                     header, _payload = parse_icmp_packet(frame)
                 except (ValueError, OSError):
-                    continue
+                    continue # Malformed packet, ignore
 
                 if header.type != ICMP_ECHO_REQUEST:
                     # Not an echo request
