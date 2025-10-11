@@ -23,15 +23,14 @@ from typing import Any
 
 from health_stats import get_basic_health
 from icmp_utils import (
+    ICMP_ECHO_REQUEST,
+    ICMP_PROTO,
     create_echo_reply,
     encode_health_data,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
     verify_checksum,
 )
-
-ICMP_PROTO = socket.IPPROTO_ICMP
-ICMP_ECHO_REQUEST = 8
 
 
 class ICMPServer:

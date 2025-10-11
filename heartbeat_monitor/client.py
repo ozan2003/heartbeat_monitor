@@ -28,14 +28,14 @@ import time
 from typing import Any
 
 from icmp_utils import (
+    ICMP_ECHO_REPLY,
+    ICMP_PROTO,
     create_echo_request,
     decode_health_data,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
 )
 
-ICMP_PROTO = socket.IPPROTO_ICMP
-ICMP_ECHO_REPLY = 0
 DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 
 

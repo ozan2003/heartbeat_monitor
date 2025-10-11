@@ -8,6 +8,7 @@ It contains:
     - Encode/decode custom payload format
 """
 
+import socket
 import struct
 import time
 from typing import Any, NamedTuple
@@ -16,6 +17,11 @@ from health_stats import HealthData
 
 VERSION = 1  # Protocol version for payload format
 MAGIC = b"HBM1"  # Magic bytes to identify our protocol in payload
+
+# Constants for ICMP
+ICMP_PROTO = socket.IPPROTO_ICMP
+ICMP_ECHO_REPLY = 0
+ICMP_ECHO_REQUEST = 8
 
 
 class ICMPHeader(NamedTuple):
@@ -98,7 +104,7 @@ def create_echo_request(_id: int, seq: int, *, payload: bytes = b"") -> bytes:
     Returns:
         bytes: The complete ICMP Echo Request packet (header + payload).
     """
-    return create_icmp_packet(8, 0, _id, seq, payload=payload)
+    return create_icmp_packet(ICMP_ECHO_REQUEST, 0, _id, seq, payload=payload)
 
 
 def create_echo_reply(_id: int, seq: int, *, payload: bytes) -> bytes:
@@ -113,7 +119,7 @@ def create_echo_reply(_id: int, seq: int, *, payload: bytes) -> bytes:
     Returns:
         bytes: The complete ICMP Echo Reply packet (header + payload).
     """
-    return create_icmp_packet(0, 0, _id, seq, payload=payload)
+    return create_icmp_packet(ICMP_ECHO_REPLY, 0, _id, seq, payload=payload)
 
 
 def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
