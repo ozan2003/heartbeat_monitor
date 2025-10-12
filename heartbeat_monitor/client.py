@@ -25,8 +25,8 @@ import select
 import socket
 import struct
 import time
-from typing import Any
 
+from health_stats import HealthData
 from icmp_utils import (
     ICMP_ECHO_REPLY,
     ICMP_PROTO,
@@ -69,7 +69,7 @@ class ICMPClient:
         self.seq = (self.seq + 1) & 0xFFFF  # truncate to 16 bits
         return self.seq
 
-    def ping_once(self, host: str) -> tuple[bool, float | None, dict[str, Any]]:
+    def ping_once(self, host: str) -> tuple[float, HealthData]:
         """
         Send one Echo Request to host and wait for Echo Reply.
 
@@ -77,10 +77,10 @@ class ICMPClient:
             host: Target hostname or IP address to ping.
 
         Returns:
-            tuple: `(ok, rtt_sec, metrics_dict)`
-            - ok: True if we got a valid reply, False on timeout or error
-            - rtt_sec: Round-trip time in seconds, or None on timeout/error
-            - metrics_dict: Parsed health metrics from the reply payload, empty if none
+            tuple[float, HealthData]: Round-trip time in seconds and decoded health data.
+
+        Raises:
+            TimeoutError: If no reply is received within the timeout period.
         """
         seq = self._next_seq()
         # Without payload
@@ -96,13 +96,13 @@ class ICMPClient:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 # True timeout - we've exceeded our deadline
-                return False, None, {}
+                raise TimeoutError("Request timed out")
 
             # Wait for socket to become readable
             ready = select.select([self.sock], [], [], remaining)[0]
             if not ready:
                 # select() timed out (shouldn't happen if remaining > 0, but just in case)
-                return False, None, {}
+                raise TimeoutError("Request timed out")
 
             # Socket is readable, receive data
             try:
@@ -137,17 +137,9 @@ class ICMPClient:
             # Decode health data
             hd = decode_health_data(payload)
 
-            metrics: dict[str, Any] = {
-                "cpu_percent": hd.cpu_percent,
-                "memory": {
-                    "percent": hd.memory_percent,
-                    "available_mb": hd.memory_available_mb,
-                },
-                "disk": {"percent": hd.disk_percent},
-            }
-            return True, rtt, metrics
+            return rtt, hd
 
-    def loop(self, hosts: list[str], interval: float, count: int | None) -> None:
+    def loop(self, hosts: list[str], *, interval: float, count: int | None) -> None:
         """Continuously ping provided hosts with an interval and print results.
 
         Args:
@@ -160,27 +152,24 @@ class ICMPClient:
             while True:
                 if count is not None and pings_sent >= count:
                     break
+
                 for host in hosts:
-                    ok, rtt, metrics = self.ping_once(host)
-                    if ok:
-                        cpu = metrics.get("cpu_percent")
-                        mem = (
-                            metrics.get("memory", {}).get("percent")
-                            if isinstance(metrics.get("memory"), dict)
-                            else None
-                        )
-                        disk = (
-                            metrics.get("disk", {}).get("percent")
-                            if isinstance(metrics.get("disk"), dict)
-                            else None
-                        )
-                        rtt = f"{(rtt or 0) * 1000:.2f}ms"
-                        print(
-                            f"{host} reply: {rtt=} {cpu=:.6f}% {mem=:.6f}% {disk=:.6f}%"
-                        )
-                    else:
+                    try:
+                        rtt, health_data = self.ping_once(host)
+                    except TimeoutError:
                         print(f"{host} request timed out")
-                    time.sleep(0.01)  # tiny spacing between hosts
+                        continue
+                    else:
+                        cpu = health_data.cpu_percent
+                        mem = health_data.memory_percent
+                        disk = health_data.disk_percent
+                        rtt *= 1000.0  # convert to milliseconds
+                        print(
+                            f"{host} reply: {rtt=:.3f}ms {cpu=:.3f}% {mem=:.3f}% {disk=:.3f}%"
+                        )
+                    finally:
+                        time.sleep(0.01)  # tiny spacing between hosts
+
                 pings_sent += 1
                 if interval > 0:
                     time.sleep(interval)
@@ -230,7 +219,7 @@ def main() -> None:
     client = ICMPClient(timeout=float(args.timeout))
     print("ICMP client started\nProbing:", ", ".join(args.hosts))
 
-    client.loop(args.hosts, float(args.interval), count)
+    client.loop(args.hosts, interval=float(args.interval), count=count)
 
 
 if __name__ == "__main__":
