@@ -5,18 +5,9 @@ It contains:
     - Functions to build ICMP packets (header + payload)
     - Functions to parse received ICMP packets
     - Calculate ICMP checksum (critical - packets rejected if wrong)
-    - Encode/decode custom payload format
-"""
+    - Encode/decode health metrics into/from binary format
 
-import socket
-import struct
-import time
-from typing import Any, NamedTuple
-
-from health_stats import HealthData
-
-"""
-Binary format:
+Binary health monitoring format:
     - Magic bytes (3 bytes): 'HBM' - identifies our protocol
     - Version (1 byte): Protocol version (currently 1)
     - Timestamp (8 bytes double): Unix timestamp when data was gathered
@@ -36,6 +27,15 @@ Format string: '!3sxBdffff'
     - f = 4 bytes float (memory available)
     - f = 4 bytes float (disk)
 """
+
+import socket
+import struct
+import time
+from typing import Any, NamedTuple
+
+from health_stats import HealthData
+
+# Constants for health data encoding/decoding
 HEALTH_FMT = "!3sxBdffff"
 HEALTH_STRUCT = struct.Struct(HEALTH_FMT)
 HEALTH_SIZE = HEALTH_STRUCT.size
@@ -47,6 +47,18 @@ MAGIC = b"HBM"  # Magic bytes to identify our protocol in payload
 ICMP_PROTO = socket.IPPROTO_ICMP
 ICMP_ECHO_REPLY = 0
 ICMP_ECHO_REQUEST = 8
+
+"""
+ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
+                    id (2 bytes), sequence (2 bytes)
+
+Checksum, ID and sequence numbers matter for echo requests/replies.
+
+See RFC 792 for details.
+"""
+ICMP_FMT = "!BBHHH"
+ICMP_STRUCT = struct.Struct(ICMP_FMT)
+ICMP_SIZE = ICMP_STRUCT.size
 
 
 class ICMPHeader(NamedTuple):
@@ -103,17 +115,17 @@ def create_icmp_packet(
     Returns:
         bytes: The complete ICMP packet (header + payload).
     """
-    checksum = 0  # To be filled in later.
+    checksum = 0  # To be calculated later.
 
-    # Pack header: type, code, checksum, id, seq
-    header = struct.pack("!BBHHH", icmp_type, icmp_code, checksum, _id, seq_num)
+    # Pack header with zero checksum initially
+    header = ICMP_STRUCT.pack(icmp_type, icmp_code, checksum, _id, seq_num)
 
     # Calculate checksum over header + payload
     packet = header + payload
     checksum = calculate_checksum(packet)
 
     # Rebuild the packet with correct checksum
-    header = struct.pack("!BBHHH", icmp_type, icmp_code, checksum, _id, seq_num)
+    header = ICMP_STRUCT.pack(icmp_type, icmp_code, checksum, _id, seq_num)
     return header + payload
 
 
@@ -160,14 +172,16 @@ def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
     Raises:
         struct.error: If packet is too short or malformed.
     """
-    if len(packet) < 8:
+    if len(packet) < ICMP_SIZE:
         raise ValueError("ICMP packet too short")
 
     # Unpack the header: type, code, checksum, id, sequence
-    icmp_type, code, checksum, packet_id, sequence = struct.unpack("!BBHHH", packet[:8])
+    icmp_type, code, checksum, packet_id, sequence = ICMP_STRUCT.unpack(
+        packet[:ICMP_SIZE]
+    )
 
     header = ICMPHeader(icmp_type, code, checksum, packet_id, sequence)
-    payload = packet[8:]
+    payload = packet[ICMP_SIZE:]
 
     return header, payload
 
@@ -183,11 +197,11 @@ def verify_checksum(packet: bytes) -> bool:
     Returns:
         bool: True if checksum is valid, False otherwise.
     """
-    if len(packet) < 8:
+    if len(packet) < ICMP_SIZE:
         return False
 
     try:
-        _t, _c, original, _id, _seq = struct.unpack("!BBHHH", packet[:8])
+        _t, _c, original, _id, _seq = ICMP_STRUCT.unpack(packet[:ICMP_SIZE])
     except struct.error:
         return False
 
