@@ -15,8 +15,33 @@ from typing import Any, NamedTuple
 
 from health_stats import HealthData
 
+"""
+Binary format:
+    - Magic bytes (3 bytes): 'HBM' - identifies our protocol
+    - Version (1 byte): Protocol version (currently 1)
+    - Timestamp (8 bytes double): Unix timestamp when data was gathered
+    - CPU percent (4 bytes float): CPU usage percentage
+    - Memory percent (4 bytes float): Memory usage percentage
+    - Memory available MB (4 bytes float): Available memory in MB
+    - Disk percent (4 bytes float): Disk usage percentage
+
+Format string: '!3sxBdffff'
+    - ! = network byte order (big-endian)
+    - 3s = 3 bytes string (magic)
+    - x = 1 byte padding (to align to 4-byte boundary)
+    - B = 1 byte unsigned char (version)
+    - d = 8 bytes double (timestamp)
+    - f = 4 bytes float (cpu)
+    - f = 4 bytes float (memory percent)
+    - f = 4 bytes float (memory available)
+    - f = 4 bytes float (disk)
+"""
+HEALTH_FMT = "!3sxBdffff"
+HEALTH_STRUCT = struct.Struct(HEALTH_FMT)
+HEALTH_SIZE = HEALTH_STRUCT.size
+
 VERSION = 1  # Protocol version for payload format
-MAGIC = b"HBM1"  # Magic bytes to identify our protocol in payload
+MAGIC = b"HBM"  # Magic bytes to identify our protocol in payload
 
 # Constants for ICMP
 ICMP_PROTO = socket.IPPROTO_ICMP
@@ -177,25 +202,6 @@ def encode_health_data(
     """
     Encode health metrics into binary payload format using struct.pack.
 
-    Binary format:
-        - Magic bytes (4 bytes): 'HBM1' - identifies our protocol
-        - Version (1 byte): Protocol version (currently 1)
-        - Timestamp (8 bytes double): Unix timestamp when data was gathered
-        - CPU percent (4 bytes float): CPU usage percentage
-        - Memory percent (4 bytes float): Memory usage percentage
-        - Memory available MB (4 bytes float): Available memory in MB
-        - Disk percent (4 bytes float): Disk usage percentage
-
-    Format string: '!4sBdffff'
-        - ! = network byte order (big-endian)
-        - 4s = 4 bytes string (magic)
-        - B = 1 byte unsigned char (version)
-        - d = 8 bytes double (timestamp)
-        - f = 4 bytes float (cpu)
-        - f = 4 bytes float (memory percent)
-        - f = 4 bytes float (memory available)
-        - f = 4 bytes float (disk)
-
     Args:
         health_dict: Dictionary containing health metrics from `get_basic_health()`
         timestamp: Optional timestamp (uses current time if `None`)
@@ -212,9 +218,7 @@ def encode_health_data(
     memory_available_mb = health_dict["memory"]["available"] / (1024 * 1024)
     disk_percent = health_dict["disk"]["percent"]
 
-    # Pack: magic(4s) + version(B) + timestamp(d) + 4 floats(ffff)
-    payload = struct.pack(
-        "!4sBdffff",
+    return HEALTH_STRUCT.pack(
         MAGIC,
         VERSION,
         timestamp,
@@ -223,8 +227,6 @@ def encode_health_data(
         memory_available_mb,
         disk_percent,
     )
-
-    return payload
 
 
 def decode_health_data(payload: bytes) -> HealthData:
@@ -240,22 +242,22 @@ def decode_health_data(payload: bytes) -> HealthData:
     Raises:
         ValueError: If payload is invalid (wrong size, magic bytes, or version)
     """
-    expected_size = struct.calcsize("!4sBdffff")
-
     # Check minimum size
-    if len(payload) < expected_size:
+    if len(payload) < HEALTH_SIZE:
         raise ValueError("Invalid payload size")
 
     # Unpack the binary data
-    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = struct.unpack(
-        "!4sBdffff", payload[:expected_size]
+    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = HEALTH_STRUCT.unpack(
+        payload[:HEALTH_SIZE]
     )
 
     # Verify magic bytes and version
     if magic != MAGIC:
-        raise ValueError("Invalid magic bytes")
+        msg = f"Invalid magic bytes: got {magic!r}, expected {MAGIC!r}"
+        raise ValueError(msg)
     if version != VERSION:
-        raise ValueError("Invalid version")
+        msg = f"Invalid version: got {version!r}, expected {VERSION!r}"
+        raise ValueError(msg)
 
     return HealthData(
         timestamp=timestamp,
