@@ -247,8 +247,8 @@ def decode_health_data(payload: bytes) -> HealthData:
         raise ValueError("Invalid payload size")
 
     # Unpack the binary data
-    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = HEALTH_STRUCT.unpack(
-        payload[:HEALTH_SIZE]
+    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = (
+        HEALTH_STRUCT.unpack(payload[:HEALTH_SIZE])
     )
 
     # Verify magic bytes and version
