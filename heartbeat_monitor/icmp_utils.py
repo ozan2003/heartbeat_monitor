@@ -582,3 +582,42 @@ def strip_ipv4_header_if_present(data: bytes) -> bytes:
         if len(data) >= ihl + 8:  # at least IP + ICMP header
             return data[ihl:]
     return data
+
+
+def extract_quoted_echo_identifiers(payload: bytes) -> tuple[int, int] | None:
+    """
+    From an ICMP error payload, extract the original Echo (id, seq) if present.
+
+    ICMP errors embed the original IP header + at least 8 bytes of the
+    original payload (RFC 792). For our echo probes, that includes the
+    original ICMP header (8 bytes), from which we can read id/seq.
+
+    Args:
+        payload: The ICMP error payload, potentially starting with an IPv4 header.
+
+    Returns:
+        (id, seq) if present and refers to an echo message; otherwise None.
+    """
+    # Must at least contain an IPv4 header
+    if len(payload) < 20 or (payload[0] >> 4) != 4:
+        return None
+    ihl = (payload[0] & 0x0F) * 4
+    if ihl < 20 or len(payload) < ihl + 8:
+        return None
+
+    inner = payload[ihl : ihl + 8]
+    try:
+        t, _c, _chk, rest = ICMP_STRUCT.unpack(inner)
+    except struct.error:
+        return None
+
+    if t not in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value):
+        return None
+    if len(rest) != 4:
+        return None
+
+    try:
+        _id, seq = struct.unpack("!HH", rest)
+    except struct.error:
+        return None
+    return _id, seq

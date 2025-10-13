@@ -10,7 +10,8 @@ In a loop:
     - Waits for reply with timeout
     - Parses reply to extract health metrics
     - Displays current status (or saves to file/db)
-    - Sleeps for poll interval (like 10 seconds)
+    - Sleeps for poll interval
+    - Handles ICMP errors (unreachable, time exceeded, etc)
 
 
 It also handles timeouts (server down/unreachable).
@@ -35,6 +36,7 @@ from icmp_utils import (
     create_echo_request,
     decode_health_data,
     extract_echo_identifiers,
+    extract_quoted_echo_identifiers,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
 )
@@ -115,10 +117,6 @@ class ICMPClient:
             except OSError:
                 continue  # Ignore socket errors, keep trying until deadline
 
-            # Filter by source IP
-            if src[0] != addr[0]:
-                continue
-
             # Strip IP header if present
             data = strip_ipv4_header_if_present(data)
             if len(data) < 8:
@@ -130,15 +128,27 @@ class ICMPClient:
             except (ValueError, struct.error):
                 continue
 
-            # If we received an ICMP error (non-echo), raise a helpful exception
-            if header.type not in (
-                ICMPTypes.ECHO_REPLY.value,
-                ICMPTypes.ECHO_REQUEST.value,
+            # Handle ICMP error types (may come from routers).
+            if header.type in (
+                ICMPTypes.DESTINATION_UNREACHABLE.value,
+                ICMPTypes.REDIRECT.value,
+                ICMPTypes.TIME_EXCEEDED.value,
+                ICMPTypes.PARAMETER_PROBLEM.value,
             ):
-                err = build_icmp_error(header)
-                if err is not None:
-                    raise err
-                # Unknown type; ignore
+                # Check if the quoted packet from the error payload
+                # were ours (same pid and seq)
+                quoted = extract_quoted_echo_identifiers(payload)
+                if quoted is None:
+                    continue
+                quoted_id, quoted_seq = quoted
+                if quoted_id == self.pid and quoted_seq == seq:
+                    err = build_icmp_error(header)
+                    if err is not None:
+                        raise err
+                continue
+
+            # For Echo replies, ensure they come from the destination host
+            if src[0] != addr[0]:
                 continue
 
             # Check if it's our Echo Reply
