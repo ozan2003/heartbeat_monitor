@@ -23,10 +23,11 @@ from typing import Any
 
 from health_stats import get_basic_health
 from icmp_utils import (
-    ICMP_ECHO_REQUEST,
     ICMP_PROTO,
+    ICMPTypes,
     create_echo_reply,
     encode_health_data,
+    extract_echo_identifiers,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
     verify_checksum,
@@ -78,16 +79,22 @@ class ICMPServer:
                 except (ValueError, OSError):
                     continue  # Malformed packet, ignore
 
-                if header.type != ICMP_ECHO_REQUEST:
-                    # Not an echo request
+                if header.type != ICMPTypes.ECHO_REQUEST.value:
+                    # Not an echo request (could be error/control); ignore
                     continue
+
+                ids = extract_echo_identifiers(header)
+                if ids is None:
+                    # Echo without id/seq? ignore
+                    continue
+                req_id, req_seq = ids
 
                 # Collect metrics and encode into payload
                 metrics: dict[str, Any] = get_basic_health()
                 payload = encode_health_data(metrics)
 
                 # Build echo reply mirroring id/sequence
-                reply = create_echo_reply(header.id, header.sequence, payload=payload)
+                reply = create_echo_reply(req_id, req_seq, payload=payload)
 
                 # Send back to the source of the request
                 # Any OSError here (e.g. network unreachable) is ignored

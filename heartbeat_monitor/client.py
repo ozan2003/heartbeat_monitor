@@ -28,10 +28,13 @@ import time
 
 from health_stats import HealthData
 from icmp_utils import (
-    ICMP_ECHO_REPLY,
     ICMP_PROTO,
+    ICMPError,
+    ICMPTypes,
+    build_icmp_error,
     create_echo_request,
     decode_health_data,
+    extract_echo_identifiers,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
 )
@@ -48,7 +51,8 @@ class ICMPClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
         # Some platforms support setting receive timeout on socket
         self.sock.settimeout(self.timeout)
-        # pid is unsigned 16-bit int, any excess bits are shaved off
+        # use current process ID as identifier
+        # identifier is unsigned 16-bit int, any excess bits are shaved off
         self.pid = os.getpid() & 0xFFFF
         self.seq = 0
 
@@ -81,6 +85,7 @@ class ICMPClient:
 
         Raises:
             TimeoutError: If no reply is received within the timeout period.
+            ICMPError: If an ICMP error message is received.
         """
         seq = self._next_seq()
         # Without payload
@@ -125,10 +130,27 @@ class ICMPClient:
             except (ValueError, struct.error):
                 continue
 
-            # Check if it's our Echo Reply
-            if header.type != ICMP_ECHO_REPLY:
+            # If we received an ICMP error (non-echo), raise a helpful exception
+            if header.type not in (
+                ICMPTypes.ECHO_REPLY.value,
+                ICMPTypes.ECHO_REQUEST.value,
+            ):
+                err = build_icmp_error(header)
+                if err is not None:
+                    raise err
+                # Unknown type; ignore
                 continue
-            if header.id != self.pid or header.sequence != seq:
+
+            # Check if it's our Echo Reply
+            if header.type != ICMPTypes.ECHO_REPLY.value:
+                continue
+
+            ids = extract_echo_identifiers(header)
+            if ids is None:
+                continue
+            rep_id, rep_seq = ids
+
+            if rep_id != self.pid or rep_seq != seq:
                 continue
 
             # Valid reply, calculate RTT
@@ -140,7 +162,8 @@ class ICMPClient:
             return rtt, hd
 
     def loop(self, hosts: list[str], *, interval: float, count: int | None) -> None:
-        """Continuously ping provided hosts with an interval and print results.
+        """
+        Continuously ping provided hosts with an interval.
 
         Args:
             hosts: List of target hostnames or IP addresses to ping.
@@ -158,6 +181,9 @@ class ICMPClient:
                         rtt, health_data = self.ping_once(host)
                     except TimeoutError:
                         print(f"{host} request timed out")
+                        continue
+                    except ICMPError as e:
+                        print(f"{host} ICMP error: {e}")
                         continue
                     else:
                         cpu = health_data.cpu_percent
