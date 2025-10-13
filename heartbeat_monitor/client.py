@@ -32,10 +32,8 @@ from icmp_utils import (
     ICMP_PROTO,
     ICMPError,
     ICMPTypes,
-    build_icmp_error,
     create_echo_request,
     decode_health_data,
-    extract_echo_identifiers,
     extract_quoted_echo_identifiers,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
@@ -142,7 +140,7 @@ class ICMPClient:
                     continue
                 quoted_id, quoted_seq = quoted
                 if quoted_id == self.pid and quoted_seq == seq:
-                    err = build_icmp_error(header)
+                    err = header.build_icmp_error()
                     if err is not None:
                         raise err
                 continue
@@ -155,7 +153,7 @@ class ICMPClient:
             if header.type != ICMPTypes.ECHO_REPLY.value:
                 continue
 
-            ids = extract_echo_identifiers(header)
+            ids = header.try_extract_echo_identifiers()
             if ids is None:
                 continue
             rep_id, rep_seq = ids

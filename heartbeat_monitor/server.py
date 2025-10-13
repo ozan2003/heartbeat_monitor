@@ -27,7 +27,6 @@ from icmp_utils import (
     ICMPTypes,
     create_echo_reply,
     encode_health_data,
-    extract_echo_identifiers,
     parse_icmp_packet,
     strip_ipv4_header_if_present,
     verify_checksum,
@@ -83,7 +82,7 @@ class ICMPServer:
                     # Not an echo request (could be error/control); ignore
                     continue
 
-                ids = extract_echo_identifiers(header)
+                ids = header.try_extract_echo_identifiers()
                 if ids is None:
                     # Echo without id/seq? ignore
                     continue

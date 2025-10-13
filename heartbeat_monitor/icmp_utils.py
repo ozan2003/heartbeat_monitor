@@ -28,6 +28,8 @@ Format string: '!3sxBdffff'
     - f = 4 bytes float (disk)
 """
 
+from __future__ import annotations
+
 import socket
 import struct
 import time
@@ -130,6 +132,98 @@ class ICMPHeader(NamedTuple):
     checksum: int
     rest: bytes  # 4-byte type-specific data
 
+    def is_echo(self) -> bool:
+        """
+        Check if the ICMP header is for an Echo Request or Echo Reply.
+
+        Returns:
+            bool: True if Echo Request or Reply; otherwise False.
+        """
+        return self.type in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
+
+    def try_extract_echo_identifiers(self) -> tuple[int, int] | None:
+        """
+        Try to extract the identifier and sequence number from an ICMP Echo header.
+
+        Returns:
+            tuple[int, int] | None: (_id, sequence) if Echo; otherwise None.
+        """
+        if not self.is_echo() or len(self.rest) != 4:
+            return None
+        _id, seq = struct.unpack("!HH", self.rest)
+        return _id, seq
+
+    def decode_icmp_rest(self) -> dict[str, Any]:
+        """
+        Decode the 4-byte rest-of-header into a dict of type-specific fields.
+
+        Supported types:
+        - Echo (request/reply): `{"id": int, "sequence": int}`
+        - Dest Unreachable (code=4): `{"next_hop_mtu": int}` else: `{}`
+        - Redirect: `{"gateway": "x.x.x.x"}`
+        - Time Exceeded: `{}`
+        - Parameter Problem: `{"pointer": int}`
+
+        Returns:
+            dict[str, Any]: Decoded fields; empty if type is unrecognized or has no fields.
+        """
+        t = self.type
+        c = self.code
+        rest = self.rest
+
+        if (
+            t in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
+            and len(rest) == 4
+        ):
+            _id, seq = struct.unpack("!HH", rest)
+            return {"id": _id, "sequence": seq}
+
+        if t == ICMPTypes.DESTINATION_UNREACHABLE.value and len(rest) == 4:
+            # For code 4 (fragmentation needed), low 16 bits are next-hop MTU
+            if c == 4:
+                _, mtu = struct.unpack("!HH", rest)
+                return {"next_hop_mtu": mtu}
+            return {}
+
+        if t == ICMPTypes.REDIRECT.value and len(rest) == 4:
+            return {"gateway": socket.inet_ntoa(rest)}
+
+        if t == ICMPTypes.TIME_EXCEEDED.value:
+            return {}
+
+        if t == ICMPTypes.PARAMETER_PROBLEM.value and len(rest) == 4:
+            pointer = rest[0]
+            return {"pointer": pointer}
+
+        return {}
+
+    def build_icmp_error(self) -> ICMPError | None:
+        """Convert an ICMP error header (non-echo) into an exception instance.
+
+        Returns:
+            ICMPError subclass instance if the type is recognized; otherwise None.
+        """
+        t = self.type
+        c = self.code
+        fields = self.decode_icmp_rest()
+
+        if t == ICMPTypes.DESTINATION_UNREACHABLE.value:
+            mtu = fields.get("next_hop_mtu")
+            return DestinationUnreachableError(c, next_hop_mtu=mtu)
+
+        if t == ICMPTypes.REDIRECT.value:
+            gw = fields.get("gateway", "<unknown>")
+            return RedirectError(c, gateway=gw)
+
+        if t == ICMPTypes.TIME_EXCEEDED.value:
+            return TimeExceededError(c)
+
+        if t == ICMPTypes.PARAMETER_PROBLEM.value:
+            ptr = fields.get("pointer")
+            return ParameterProblemError(c, pointer=ptr)
+
+        return None
+
 
 # ------------------- ICMP error exceptions -------------------
 class ICMPError(Exception):
@@ -188,35 +282,7 @@ class ParameterProblemError(ICMPError):
         self.pointer = pointer
 
 
-def build_icmp_error(header: ICMPHeader) -> ICMPError | None:
-    """Convert an ICMP error header (non-echo) into an exception instance.
-
-    Args:
-        header: Parsed ICMPHeader from a received packet.
-
-    Returns:
-        ICMPError subclass instance if the type is recognized; otherwise None.
-    """
-    t = header.type
-    c = header.code
-    fields = decode_icmp_rest(header)
-
-    if t == ICMPTypes.DESTINATION_UNREACHABLE.value:
-        mtu = fields.get("next_hop_mtu")
-        return DestinationUnreachableError(c, next_hop_mtu=mtu)
-
-    if t == ICMPTypes.REDIRECT.value:
-        gw = fields.get("gateway", "<unknown>")
-        return RedirectError(c, gateway=gw)
-
-    if t == ICMPTypes.TIME_EXCEEDED.value:
-        return TimeExceededError(c)
-
-    if t == ICMPTypes.PARAMETER_PROBLEM.value:
-        ptr = fields.get("pointer")
-        return ParameterProblemError(c, pointer=ptr)
-
-    return None
+# -------------------------------------------------------------
 
 
 def calculate_checksum(data: bytes) -> int:
@@ -450,87 +516,6 @@ def decode_health_data(payload: bytes) -> HealthData:
         memory_available_mb=mem_avail_mb,
         disk_percent=disk,
     )
-
-
-# ------------------- Helpers for dynamic ICMP header -------------------
-
-
-def is_echo(header: ICMPHeader) -> bool:
-    """
-    Check if the ICMP header is for an Echo Request or Echo Reply.
-
-    Args:
-        header: Parsed ICMPHeader
-
-    Returns:
-        bool: True if Echo Request or Reply; otherwise False.
-    """
-    return header.type in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
-
-
-def extract_echo_identifiers(header: ICMPHeader) -> tuple[int, int] | None:
-    """
-    Try to extract the identifier and sequence number from an ICMP Echo header.
-
-    Args:
-        header: Parsed ICMPHeader
-
-    Returns:
-        tuple[int, int] | None: (_id, sequence) if Echo; otherwise None.
-    """
-    if not is_echo(header) or len(header.rest) != 4:
-        return None
-    _id, seq = struct.unpack("!HH", header.rest)
-    return _id, seq
-
-
-def decode_icmp_rest(header: ICMPHeader) -> dict[str, Any]:
-    """
-    Decode the 4-byte rest-of-header into a dict of type-specific fields.
-
-    Supported types:
-      - Echo (request/reply): `{"id": int, "sequence": int}`
-      - Dest Unreachable (code=4): `{"next_hop_mtu": int}` else: `{}`
-      - Redirect: `{"gateway": "x.x.x.x"}`
-      - Time Exceeded: `{}`
-      - Parameter Problem: `{"pointer": int}`
-
-    Args:
-        header: Parsed ICMPHeader
-
-    Returns:
-        dict[str, Any]: Decoded fields; empty if type is unrecognized or has no fields.
-
-    """
-    t = header.type
-    c = header.code
-    rest = header.rest
-
-    if (
-        t in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
-        and len(rest) == 4
-    ):
-        _id, seq = struct.unpack("!HH", rest)
-        return {"id": _id, "sequence": seq}
-
-    if t == ICMPTypes.DESTINATION_UNREACHABLE.value and len(rest) == 4:
-        # For code 4 (fragmentation needed), low 16 bits are next-hop MTU
-        if c == 4:
-            _, mtu = struct.unpack("!HH", rest)
-            return {"next_hop_mtu": mtu}
-        return {}
-
-    if t == ICMPTypes.REDIRECT.value and len(rest) == 4:
-        return {"gateway": socket.inet_ntoa(rest)}
-
-    if t == ICMPTypes.TIME_EXCEEDED.value:
-        return {}
-
-    if t == ICMPTypes.PARAMETER_PROBLEM.value and len(rest) == 4:
-        pointer = rest[0]
-        return {"pointer": pointer}
-
-    return {}
 
 
 def build_rest_for_redirect(gateway_ip: str) -> bytes:
