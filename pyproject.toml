@@ -49,8 +49,6 @@ ignore = [
     "COM812",
     "D203",
     "D213",
-    "ANN101",
-    "ANN102",
     "ANN401",  # use Any in **kwargs
     "PLR2004",
     "S101",
