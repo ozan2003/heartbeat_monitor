@@ -1,0 +1,76 @@
+[project]
+name = "heartbeat-monitor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "psutil>=7.1.2",
+]
+
+[dependency-groups]
+dev = ["mypy>=1.9.0", "ruff>=0.2.2"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py312"
+src = ["heartbeat_monitor"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "A",
+    "C4",
+    "PIE",
+    "SIM",
+    "RET",
+    "ARG",
+    "PTH",
+    "PL",
+    "RUF",
+    "S",
+    "BLE",
+    "ANN",
+    "ASYNC",
+    "PT",
+    "D101",
+    "D102",
+    "D103",
+]
+ignore = [
+    "E501",
+    "ISC001",
+    "COM812",
+    "D203",
+    "D213",
+    "ANN101",
+    "ANN102",
+    "ANN401", # use Any in **kwargs
+    "PLR2004",
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN", "D101", "D102", "D103"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
