@@ -139,7 +139,10 @@ class ICMPHeader(NamedTuple):
         Returns:
             bool: True if Echo Request or Reply; otherwise False.
         """
-        return self.type in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
+        return self.type in (
+            ICMPTypes.ECHO_REQUEST.value,
+            ICMPTypes.ECHO_REPLY.value,
+        )
 
     def try_extract_echo_identifiers(self) -> tuple[int, int] | None:
         """
@@ -269,16 +272,22 @@ class TimeExceededError(ICMPError):
 
     def __init__(self, code: int) -> None:
         desc = TIME_EXCEEDED_DESC.get(code, f"Time exceeded (code {code})")
-        super().__init__(desc, icmp_type=ICMPTypes.TIME_EXCEEDED.value, code=code)
+        super().__init__(
+            desc, icmp_type=ICMPTypes.TIME_EXCEEDED.value, code=code
+        )
 
 
 class ParameterProblemError(ICMPError):
     """ICMP Parameter Problem error indicating an issue in the IP header."""
 
     def __init__(self, code: int, *, pointer: int | None = None) -> None:
-        base = PARAMETER_PROBLEM_DESC.get(code, f"Parameter problem (code {code})")
+        base = PARAMETER_PROBLEM_DESC.get(
+            code, f"Parameter problem (code {code})"
+        )
         msg = f"{base}" if pointer is None else f"{base} at byte {pointer}"
-        super().__init__(msg, icmp_type=ICMPTypes.PARAMETER_PROBLEM.value, code=code)
+        super().__init__(
+            msg, icmp_type=ICMPTypes.PARAMETER_PROBLEM.value, code=code
+        )
         self.pointer = pointer
 
 
@@ -329,7 +338,8 @@ def create_icmp_packet(
         bytes: The complete ICMP packet (header + payload).
     """
     if len(rest) != 4:
-        raise ValueError("ICMP rest-of-header must be exactly 4 bytes")
+        msg = "ICMP rest-of-header must be exactly 4 bytes"
+        raise ValueError(msg)
 
     checksum = 0  # To be calculated later.
 
@@ -408,7 +418,8 @@ def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
         struct.error: If packet is too short or malformed.
     """
     if len(packet) < ICMP_SIZE:
-        raise ValueError("ICMP packet too short")
+        msg = "ICMP packet too short"
+        raise ValueError(msg)
 
     # Unpack the header: type, code, checksum, rest-of-header (4 bytes)
     icmp_type, code, checksum, rest = ICMP_STRUCT.unpack(packet[:ICMP_SIZE])
@@ -494,7 +505,8 @@ def decode_health_data(payload: bytes) -> HealthData:
     """
     # Check minimum size
     if len(payload) < HEALTH_SIZE:
-        raise ValueError("Invalid payload size")
+        msg = "Invalid payload size"
+        raise ValueError(msg)
 
     # Unpack the binary data
     magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = (

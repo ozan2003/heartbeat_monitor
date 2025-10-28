@@ -101,13 +101,15 @@ class ICMPClient:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 # True timeout - we've exceeded our deadline
-                raise TimeoutError("Request timed out")
+                msg = "Request timed out"
+                raise TimeoutError(msg)
 
             # Wait for socket to become readable
             ready = select.select([self.sock], [], [], remaining)[0]
             if not ready:
                 # select() timed out (shouldn't happen if remaining > 0, but just in case)
-                raise TimeoutError("Request timed out")
+                msg = "Request timed out"
+                raise TimeoutError(msg)
 
             # Socket is readable, receive data
             try:
@@ -169,7 +171,9 @@ class ICMPClient:
 
             return rtt, hd
 
-    def loop(self, hosts: list[str], *, interval: float, count: int | None) -> None:
+    def loop(
+        self, hosts: list[str], *, interval: float, count: int | None
+    ) -> None:
         """
         Continuously ping provided hosts with an interval.
 
@@ -229,10 +233,18 @@ def parse_args() -> argparse.Namespace:
         "hosts", nargs="*", default=["127.0.0.1"], help="Target hosts/IPs"
     )
     parser.add_argument(
-        "-i", "--interval", type=float, default=5.0, help="Probe interval seconds"
+        "-i",
+        "--interval",
+        type=float,
+        default=5.0,
+        help="Probe interval seconds",
     )
     parser.add_argument(
-        "-c", "--count", type=int, default=0, help="Number of probe rounds (0=infinite)"
+        "-c",
+        "--count",
+        type=int,
+        default=0,
+        help="Number of probe rounds (0=infinite)",
     )
     parser.add_argument(
         "-W",
