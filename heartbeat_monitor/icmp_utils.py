@@ -174,31 +174,31 @@ class ICMPHeader(NamedTuple):
         c = self.code
         rest = self.rest
 
+        fields = {}
+
         if (
             t in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
             and len(rest) == 4
         ):
             _id, seq = struct.unpack("!HH", rest)
-            return {"id": _id, "sequence": seq}
-
-        if t == ICMPTypes.DESTINATION_UNREACHABLE.value and len(rest) == 4:
+            fields = {"id": _id, "sequence": seq}
+        elif t == ICMPTypes.DESTINATION_UNREACHABLE.value and len(rest) == 4:
             # For code 4 (fragmentation needed), low 16 bits are next-hop MTU
             if c == 4:
                 _, mtu = struct.unpack("!HH", rest)
-                return {"next_hop_mtu": mtu}
-            return {}
-
-        if t == ICMPTypes.REDIRECT.value and len(rest) == 4:
-            return {"gateway": socket.inet_ntoa(rest)}
-
-        if t == ICMPTypes.TIME_EXCEEDED.value:
-            return {}
-
-        if t == ICMPTypes.PARAMETER_PROBLEM.value and len(rest) == 4:
+                fields = {"next_hop_mtu": mtu}
+        elif t == ICMPTypes.REDIRECT.value and len(rest) == 4:
+            fields = {"gateway": socket.inet_ntoa(rest)}
+        elif t == ICMPTypes.PARAMETER_PROBLEM.value and len(rest) == 4:
             pointer = rest[0]
-            return {"pointer": pointer}
+            fields = {"pointer": pointer}
+        # For TIME_EXCEEDED and unrecognized types, result stays empty
+        elif t == ICMPTypes.TIME_EXCEEDED.value:
+            pass
+        else:
+            pass
 
-        return {}
+        return fields
 
     def build_icmp_error(self) -> ICMPError | None:
         """Convert an ICMP error header (non-echo) into an exception instance.
@@ -593,28 +593,26 @@ def extract_quoted_echo_identifiers(payload: bytes) -> tuple[int, int] | None:
         payload: The ICMP error payload, potentially starting with an IPv4 header.
 
     Returns:
-        (id, seq) if present and refers to an echo message; otherwise None.
+        `(_id, seq)` if present and refers to an echo message; otherwise None.
     """
+    idents = None
+
     # Must at least contain an IPv4 header
-    if len(payload) < 20 or (payload[0] >> 4) != 4:
-        return None
-    ihl = (payload[0] & 0x0F) * 4
-    if ihl < 20 or len(payload) < ihl + 8:
-        return None
+    if len(payload) >= 20 and (payload[0] >> 4) == 4:
+        ihl = (payload[0] & 0x0F) * 4
 
-    inner = payload[ihl : ihl + 8]
-    try:
-        t, _c, _chk, rest = ICMP_STRUCT.unpack(inner)
-    except struct.error:
-        return None
+        if ihl >= 20 and len(payload) >= ihl + 8:
+            inner = payload[ihl : ihl + 8]
 
-    if t not in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value):
-        return None
-    if len(rest) != 4:
-        return None
+            try:
+                t, _c, _chk, rest = ICMP_STRUCT.unpack(inner)
+                if len(rest) == 4 and t in (
+                    ICMPTypes.ECHO_REQUEST.value,
+                    ICMPTypes.ECHO_REPLY.value,
+                ):
+                    _id, seq = struct.unpack("!HH", rest)
+                    idents = (_id, seq)
+            except struct.error:
+                pass
 
-    try:
-        _id, seq = struct.unpack("!HH", rest)
-    except struct.error:
-        return None
-    return _id, seq
+    return idents
