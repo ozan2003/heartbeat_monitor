@@ -94,8 +94,15 @@ class ICMPClient:
         addr = (socket.gethostbyname(host), 0)
         start = time.monotonic()
         self.sock.sendto(packet, addr)
+        deadline = start + self.timeout
 
-        deadline = start + self.timeout  # Absolute deadline
+        def is_icmp_error_type(header_type: int) -> bool:
+            return header_type in (
+                ICMPTypes.DESTINATION_UNREACHABLE.value,
+                ICMPTypes.REDIRECT.value,
+                ICMPTypes.TIME_EXCEEDED.value,
+                ICMPTypes.PARAMETER_PROBLEM.value,
+            )
 
         while True:
             remaining = deadline - time.monotonic()
@@ -115,61 +122,47 @@ class ICMPClient:
             try:
                 data, src = self.sock.recvfrom(65535)
             except OSError:
-                continue  # Ignore socket errors, keep trying until deadline
+                continue
 
             # Strip IP header if present
             data = strip_ipv4_header_if_present(data)
             if len(data) < 8:
                 continue
 
-            # Parse ICMP packet
+            # Parse the packet
             try:
                 header, payload = parse_icmp_packet(data)
             except (ValueError, struct.error):
                 continue
 
-            # Handle ICMP error types (may come from routers).
-            if header.type in (
-                ICMPTypes.DESTINATION_UNREACHABLE.value,
-                ICMPTypes.REDIRECT.value,
-                ICMPTypes.TIME_EXCEEDED.value,
-                ICMPTypes.PARAMETER_PROBLEM.value,
-            ):
+            if is_icmp_error_type(header.type):
                 # Check if the quoted packet from the error payload
                 # were ours (same pid and seq)
                 quoted = extract_quoted_echo_identifiers(payload)
-                if quoted is None:
-                    continue
-                quoted_id, quoted_seq = quoted
-                if quoted_id == self.pid and quoted_seq == seq:
+                if (
+                    quoted is not None
+                    and quoted[0] == self.pid
+                    and quoted[1] == seq
+                ):
                     err = header.build_icmp_error()
                     if err is not None:
                         raise err
                 continue
 
             # For Echo replies, ensure they come from the destination host
-            if src[0] != addr[0]:
-                continue
+            # and check if it's our Echo Reply
+            if src[0] == addr[0] and header.type == ICMPTypes.ECHO_REPLY.value:
+                idents = header.try_extract_echo_identifiers()
 
-            # Check if it's our Echo Reply
-            if header.type != ICMPTypes.ECHO_REPLY.value:
-                continue
-
-            ids = header.try_extract_echo_identifiers()
-            if ids is None:
-                continue
-            rep_id, rep_seq = ids
-
-            if rep_id != self.pid or rep_seq != seq:
-                continue
-
-            # Valid reply, calculate RTT
-            rtt = time.monotonic() - start
-
-            # Decode health data
-            hd = decode_health_data(payload)
-
-            return rtt, hd
+                if (
+                    idents is not None
+                    and idents[0] == self.pid
+                    and idents[1] == seq
+                ):
+                    # Valid reply
+                    rtt = time.monotonic() - start
+                    hd = decode_health_data(payload)
+                    return rtt, hd
 
     def loop(
         self, hosts: list[str], *, interval: float, count: int | None
