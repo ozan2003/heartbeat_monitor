@@ -1,17 +1,18 @@
 # Heartbeat Monitor
 
-A simple client-server heartbeat monitoring tool for system analytics using ICMP (ping) packets.
+A simple client-server heartbeat monitoring tool for system analytics using ICMP packets.
 
 ## Overview
 
-This project provides a lightweight way to monitor system health metrics (CPU, memory, disk usage) over a network using custom ICMP echo requests and replies. It consists of:
+This project provides a lightweight way to monitor system health metrics
+(CPU, memory, disk usage) over a network using custom ICMP echo requests and replies. It consists of:
 
 - **ICMP Server**: Listens for ICMP echo requests and responds with encoded system health data.
 - **ICMP Client**: Periodically sends ICMP echo requests to servers, parses replies, and displays health metrics.
 
 ## Features
 
-- Uses raw ICMP sockets for communication (requires root or CAP_NET_RAW).
+- Uses raw ICMP sockets for communication.
 - Encodes system health metrics in ICMP payloads.
 - Cross-platform system stats via `psutil`.
 - Handles timeouts and ICMP errors gracefully.

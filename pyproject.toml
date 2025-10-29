@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "A simple client-server heartbeat monitoring tool for system analytics."
 license.file = "LICENSE"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = ["psutil>=7.1.2"]
 
 [dependency-groups]
-dev = ["mypy>=1.9.0", "ruff>=0.2.2"]
+dev = ["mypy>=1.9.0", "ruff>=0.2.2", "vermin>=1.7.0"]
 
 [tool.ruff]
 line-length = 79
