@@ -39,8 +39,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-# Database file path
-DB_PATH = "heartbeat_monitor.db"
+# Database file path (next to the client script directory)
+CLIENT_DIR = Path(__file__).resolve().parents[1]
+DB_PATH = str(CLIENT_DIR / "heartbeat_monitor.db")
 
 # Thread-local storage for database connections
 _thread_local = threading.local()

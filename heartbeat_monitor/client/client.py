@@ -27,6 +27,12 @@ import socket
 import struct
 import time
 
+from heartbeat_monitor.client.db import (
+    close_thread_connection,
+    init_database,
+    insert_health_measurement,
+    insert_icmp_event,
+)
 from heartbeat_monitor.health_stats import HealthData
 from heartbeat_monitor.icmp_utils import (
     ICMP_PROTO,
@@ -57,9 +63,10 @@ class ICMPClient:
         self.seq = 0
 
     def close(self) -> None:
-        """Close the underlying socket."""
+        """Close the underlying socket and database connection."""
         with contextlib.suppress(OSError):
             self.sock.close()
+        close_thread_connection()
 
     def _next_seq(self) -> int:
         """
@@ -182,21 +189,50 @@ class ICMPClient:
                     break
 
                 for host in hosts:
+                    # Resolve hostname to IP address for database storage
+                    try:
+                        ip_address = socket.gethostbyname(host)
+                    except socket.gaierror:
+                        print(f"{host} DNS resolution failed")
+                        continue
+
                     try:
                         rtt, health_data = self.ping_once(host)
                     except TimeoutError:
                         print(f"{host} request timed out")
+                        insert_icmp_event(
+                            ip_address=ip_address,
+                            event_type="timeout",
+                            details="Request timed out",
+                        )
                         continue
                     except ICMPError as e:
                         print(f"{host} ICMP error: {e}")
+                        # Extract ICMP type/code from the error if available
+                        icmp_type = getattr(e, "icmp_type", None)
+                        icmp_code = getattr(e, "icmp_code", None)
+                        insert_icmp_event(
+                            ip_address=ip_address,
+                            event_type="icmp_error",
+                            icmp_type=icmp_type,
+                            icmp_code=icmp_code,
+                            details=str(e),
+                        )
                         continue
                     else:
                         cpu = health_data.cpu_percent
                         mem = health_data.memory_percent
                         disk = health_data.disk_percent
-                        rtt *= 1000.0  # convert to milliseconds
-                        print(
-                            f"{host} reply: {rtt=:.3f}ms {cpu=:.3f}% {mem=:.3f}% {disk=:.3f}%"
+                        rtt_ms = rtt * 1000.0  # convert to milliseconds
+
+                        insert_health_measurement(
+                            ip_address=ip_address,
+                            rtt_ms=rtt_ms,
+                            cpu_percent=cpu,
+                            memory_percent=mem,
+                            memory_available_mb=health_data.memory_available_mb,
+                            disk_percent=disk,
+                            server_timestamp=None,
                         )
                     finally:
                         time.sleep(0.01)  # tiny spacing between hosts
@@ -255,8 +291,11 @@ def main() -> None:
 
     count = None if args.count == 0 else max(0, int(args.count))
 
+    init_database()
+
     client = ICMPClient(timeout=float(args.timeout))
-    print("ICMP client started\nProbing:", ", ".join(args.hosts))
+    print("ICMP client started")
+    print("Probing:", ", ".join(args.hosts))
 
     client.loop(args.hosts, interval=float(args.interval), count=count)
 
