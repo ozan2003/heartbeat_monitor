@@ -10,6 +10,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .health_stats import HealthData, get_basic_health
 from .icmp_utils import ICMPError, ICMPTypes
+from .logging_utils import configure_logging, get_logger, logger
 
 try:
     __version__ = version("heartbeat-monitor")
@@ -23,5 +24,8 @@ __all__: list[str] = [
     "ICMPError",
     "ICMPTypes",
     "__version__",
+    "configure_logging",
     "get_basic_health",
+    "get_logger",
+    "logger",
 ]

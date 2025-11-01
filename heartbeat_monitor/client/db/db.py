@@ -36,6 +36,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from logging import Logger
 from pathlib import Path
 from typing import Any
 
@@ -93,12 +94,15 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
     yield conn
 
 
-def init_database() -> None:
+def init_database(logger: Logger) -> None:
     """
     Initialize database and create tables from schema file.
 
     This should be called once when the application starts.
     Loads schema from db_schema.sql and enables WAL mode.
+
+    Args:
+        logger: Logger instance to use for logging
 
     Raises:
         FileNotFoundError: If db_schema.sql is not found
@@ -107,6 +111,7 @@ def init_database() -> None:
     schema_path = Path(__file__).parent / "db_schema.sql"
 
     if not schema_path.exists():
+        logger.error("Database schema not found at %s", schema_path)
         msg = (
             f"Schema file not found: {schema_path}\n"
             f"Please ensure db_schema.sql is in the same directory as db.py"
@@ -116,27 +121,36 @@ def init_database() -> None:
     schema_sql = schema_path.read_text(encoding="utf-8")
 
     # Create/open database
+    logger.debug("Connecting to database: %s", DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys=ON")
 
     # Enable WAL mode (persists in database file)
+    logger.debug("Enabling WAL mode")
     result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
     wal_mode = result[0] if result else "unknown"
 
     # Performance tuning
+    logger.debug("Tuning performance")
     conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety/speed with WAL
     conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
     conn.execute("PRAGMA temp_store=MEMORY")  # Keep temp tables in RAM
     conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
 
     # Execute schema
+    logger.debug("Executing schema")
     conn.executescript(schema_sql)
+    logger.debug("Committing changes")
     conn.commit()
+    logger.debug("Closing database connection")
     conn.close()
 
-    print(f"   Database initialized: {DB_PATH}")
-    print(f"   Journal mode: {wal_mode}")
-    print(f"   Schema loaded from: {schema_path.name}")
+    logger.info(
+        "Database initialized: path=%s, journal_mode=%s, schema=%s",
+        DB_PATH,
+        wal_mode,
+        schema_path.name,
+    )
 
 
 def verify_database() -> dict[str, Any]:

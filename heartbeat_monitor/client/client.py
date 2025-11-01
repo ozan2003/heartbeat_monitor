@@ -26,6 +26,7 @@ import select
 import socket
 import struct
 import time
+from logging import Logger, getLevelName
 
 from heartbeat_monitor.client.db import (
     close_thread_connection,
@@ -44,6 +45,7 @@ from heartbeat_monitor.icmp_utils import (
     parse_icmp_packet,
     strip_ipv4_header_if_present,
 )
+from heartbeat_monitor.logging_utils import configure_logging
 
 DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 
@@ -51,7 +53,19 @@ DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 class ICMPClient:
     """ICMP monitoring client that probes servers and prints health metrics."""
 
-    def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
+    def __init__(
+        self, logger: Logger, timeout: float = DEFAULT_TIMEOUT
+    ) -> None:
+        """
+        Initialize ICMP client.
+
+        Args:
+            logger: Logger instance to use for logging
+            timeout: Per-request timeout in seconds
+        """
+        self.logger = logger
+        self.logger.debug("Initializing ICMP client")
+
         self.timeout = timeout
         # Raw ICMP socket (requires root or CAP_NET_RAW)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
@@ -66,6 +80,7 @@ class ICMPClient:
         """Close the underlying socket and database connection."""
         with contextlib.suppress(OSError):
             self.sock.close()
+            self.logger.debug("ICMP client socket closed")
         close_thread_connection()
 
     def _next_seq(self) -> int:
@@ -97,11 +112,18 @@ class ICMPClient:
         seq = self._next_seq()
         # Without payload
         packet = create_echo_request(self.pid, seq)
-
+        self.logger.debug(
+            "Echo request built for identifier %s and sequence %s",
+            self.pid,
+            seq,
+        )
         addr = (socket.gethostbyname(host), 0)
+        self.logger.debug("Address resolved for %s: %s", host, addr)
         start = time.monotonic()
+        self.logger.debug("Sending echo request to %s:%s", host, seq)
         self.sock.sendto(packet, addr)
         deadline = start + self.timeout
+        self.logger.debug("Deadline set for %s seconds", self.timeout)
 
         def is_icmp_error_type(header_type: int) -> bool:
             return header_type in (
@@ -129,6 +151,7 @@ class ICMPClient:
             try:
                 data, src = self.sock.recvfrom(65535)
             except OSError:
+                self.logger.error("Socket error", exc_info=True)
                 continue
 
             # Strip IP header if present
@@ -140,6 +163,7 @@ class ICMPClient:
             try:
                 header, payload = parse_icmp_packet(data)
             except (ValueError, struct.error):
+                self.logger.error("Malformed packet received", exc_info=True)
                 continue
 
             if is_icmp_error_type(header.type):
@@ -151,6 +175,9 @@ class ICMPClient:
                     and quoted[0] == self.pid
                     and quoted[1] == seq
                 ):
+                    self.logger.debug(
+                        "ICMP error type %s detected", header.type
+                    )
                     err = header.build_icmp_error()
                     if err is not None:
                         raise err
@@ -167,6 +194,10 @@ class ICMPClient:
                     and idents[1] == seq
                 ):
                     # Valid reply
+                    self.logger.debug(
+                        "Valid echo reply received from %s:%s", src[0], seq
+                    )
+
                     rtt = time.monotonic() - start
                     hd = decode_health_data(payload)
                     return rtt, hd
@@ -186,6 +217,7 @@ class ICMPClient:
         try:
             while True:
                 if count is not None and pings_sent >= count:
+                    self.logger.debug("Ping count reached, stopping")
                     break
 
                 for host in hosts:
@@ -193,21 +225,22 @@ class ICMPClient:
                     try:
                         ip_address = socket.gethostbyname(host)
                     except socket.gaierror:
-                        print(f"{host} DNS resolution failed")
+                        self.logger.error("%s DNS resolution failed", host)
                         continue
 
                     try:
                         rtt, health_data = self.ping_once(host)
                     except TimeoutError:
-                        print(f"{host} request timed out")
+                        self.logger.warning("%s request timed out", host)
                         insert_icmp_event(
                             ip_address=ip_address,
                             event_type="timeout",
                             details="Request timed out",
                         )
+                        self.logger.debug("Inserted ICMP event for %s", host)
                         continue
                     except ICMPError as e:
-                        print(f"{host} ICMP error: {e}")
+                        self.logger.error("ICMP error: %s", e)
                         # Extract ICMP type/code from the error if available
                         icmp_type = getattr(e, "icmp_type", None)
                         icmp_code = getattr(e, "icmp_code", None)
@@ -218,6 +251,7 @@ class ICMPClient:
                             icmp_code=icmp_code,
                             details=str(e),
                         )
+                        self.logger.debug("Inserted ICMP event for %s", host)
                         continue
                     else:
                         cpu = health_data.cpu_percent
@@ -234,6 +268,9 @@ class ICMPClient:
                             disk_percent=disk,
                             server_timestamp=None,
                         )
+                        self.logger.debug(
+                            "Inserted health measurement for %s", host
+                        )
                     finally:
                         time.sleep(0.01)  # tiny spacing between hosts
 
@@ -241,8 +278,9 @@ class ICMPClient:
                 if interval > 0:
                     time.sleep(interval)
         except KeyboardInterrupt:
-            pass
+            self.logger.debug("Keyboard interrupt received, stopping")
         finally:
+            self.logger.debug("Closing ICMP client")
             self.close()
 
 
@@ -282,6 +320,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_TIMEOUT,
         help="Per-request timeout seconds",
     )
+    parser.add_argument(
+        "-log",
+        "--loglevel",
+        default="info",
+        help="Provide logging level",
+    )
     return parser.parse_args()
 
 
@@ -289,13 +333,17 @@ def main() -> None:
     """Entry point for the ICMP client."""
     args = parse_args()
 
+    logger = configure_logging(args.loglevel)
+    logger.debug("Logging now set up to %s", getLevelName(logger.level))
+
     count = None if args.count == 0 else max(0, int(args.count))
 
-    init_database()
+    init_database(logger=logger)
+    logger.info("Database initialized")
 
-    client = ICMPClient(timeout=float(args.timeout))
-    print("ICMP client started")
-    print("Probing:", ", ".join(args.hosts))
+    client = ICMPClient(logger=logger, timeout=float(args.timeout))
+    logger.debug("ICMP client started")
+    logger.debug("Probing: %s", ", ".join(args.hosts))
 
     client.loop(args.hosts, interval=float(args.interval), count=count)
 
