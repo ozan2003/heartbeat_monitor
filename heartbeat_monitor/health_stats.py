@@ -39,7 +39,7 @@ def get_cpu_percent() -> float:
     """
     # interval=0.0 returns the current value immediately (no 1s sleep)
     # On the very first call it may return 0.0 which is acceptable for a heartbeat.
-    return psutil.cpu_percent(interval=0.0)
+    return float(psutil.cpu_percent(interval=0.0))
 
 
 def get_memory_info() -> dict[str, int | float]:

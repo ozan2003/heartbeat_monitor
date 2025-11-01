@@ -1,6 +1,6 @@
 [project]
 name = "heartbeat-monitor"
-version = "0.1.1"
+version = "0.1.2"
 description = "A simple client-server heartbeat monitoring tool for system analytics."
 license.file = "LICENSE"
 readme = "README.md"
@@ -50,6 +50,7 @@ ignore = [
     "D203",
     "D213",
     "ANN401",  # use Any in **kwargs
+    "PLR0913",
     "PLR2004",
     "S101",
 ]
