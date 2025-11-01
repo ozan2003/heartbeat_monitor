@@ -17,10 +17,22 @@ This project provides a lightweight way to monitor system health metrics
 - Cross-platform system stats via `psutil`.
 - Handles timeouts and ICMP errors gracefully.
 
+## Database
+
+The app saves a small database file so you can look back at past checks.
+
+- **What is stored**: A list of servers, recent health checks (speed and usage), and any ICMP connection problems.
+- **Where it is**: Its located in the same directory as the client script.
+- **Do I need to set it up?** No. The file is created automatically when you run the client.
+- **Time zone**: All times are in UTC.
+- **Start fresh**: Close the app and delete the database file.
+- **Back up**: Copy that `.db` file while the app is closed; restore by replacing it with your copy.
+
 ## Requirements
 
 - Python 3.12+
 - `psutil` library
+- SQLite
 
 ## Usage
 
