@@ -27,8 +27,8 @@ import socket
 import struct
 import time
 
-from health_stats import HealthData
-from icmp_utils import (
+from heartbeat_monitor.health_stats import HealthData
+from heartbeat_monitor.icmp_utils import (
     ICMP_PROTO,
     ICMPError,
     ICMPTypes,

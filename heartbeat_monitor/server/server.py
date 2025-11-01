@@ -21,8 +21,8 @@ import contextlib
 import socket
 from typing import Any
 
-from health_stats import get_basic_health
-from icmp_utils import (
+from heartbeat_monitor.health_stats import get_basic_health
+from heartbeat_monitor.icmp_utils import (
     ICMP_PROTO,
     ICMPTypes,
     create_echo_reply,

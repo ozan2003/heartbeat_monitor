@@ -36,7 +36,7 @@ import time
 from enum import IntEnum
 from typing import Any, NamedTuple
 
-from health_stats import HealthData
+from heartbeat_monitor.health_stats import HealthData
 
 # Constants for health data encoding/decoding
 HEALTH_FMT = "!3sxBdffff"
