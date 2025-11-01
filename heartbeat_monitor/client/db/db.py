@@ -7,39 +7,28 @@ monitoring results:
 - ICMP events (timeouts and errors)
 - Timestamp measurements (for clock skew tracking)
 
-Design
+Design:
 - One connection per thread via thread-local storage for safe concurrent writes
 - WAL journaling mode with autocommit for balanced durability and performance
 - Schema defined in `db_schema.sql` (same directory), applied by `init_database()`
 
-Typical usage:
-    from heartbeat_monitor.client.db import (
-        init_database,
-        insert_health_measurement,
-        get_recent_measurements,
-    )
-
-    init_database()
-    insert_health_measurement(
-        ip_address="192.0.2.10",
-        rtt_ms=12.3,
-        cpu_percent=4.2,
-        memory_percent=37.5,
-        memory_available_mb=1024.0,
-        disk_percent=51.8,
-        server_timestamp=None,
-    )
-    rows = get_recent_measurements("192.0.2.10", limit=10)
-
-Public API (also re-exported by the package `__init__`):
-- init_database, verify_database, cleanup_old_data
-- get_thread_connection, get_db_connection, close_thread_connection
-- get_or_create_server
-- insert_health_measurement, insert_icmp_event, insert_timestamp_measurement
-- get_recent_measurements, get_server_stats, get_all_servers
-
-All timestamps saved by SQLite's `CURRENT_TIMESTAMP` are ISO 8601
-(YYYY-MM-DD HH:MM:SS) without timezone.
+Example usage:
+    >>> from heartbeat_monitor.client.db import (
+    >>>     init_database,
+    >>>     insert_health_measurement,
+    >>>     get_recent_measurements,
+    >>> )
+    >>> init_database()
+    >>> insert_health_measurement(
+    >>>     ip_address="192.0.2.10",
+    >>>     rtt_ms=12.3,
+    >>>     cpu_percent=4.2,
+    >>>     memory_percent=37.5,
+    >>>     memory_available_mb=1024.0,
+    >>>     disk_percent=51.8,
+    >>>     server_timestamp=None,
+    >>> )
+    >>> rows = get_recent_measurements("192.0.2.10", limit=10)
 """
 
 import json
