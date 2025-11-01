@@ -73,7 +73,8 @@ def get_thread_connection() -> sqlite3.Connection:
         _thread_local.conn.execute("PRAGMA temp_store=MEMORY")
         _thread_local.conn.execute("PRAGMA mmap_size=268435456")
 
-    return _thread_local.conn
+    conn: sqlite3.Connection = _thread_local.conn
+    return conn
 
 
 @contextmanager
@@ -219,7 +220,7 @@ def get_or_create_server(ip_address: str, hostname: str | None = None) -> int:
             (ip_address,),
         )
 
-        return result["id"]
+        return int(result["id"])
 
 
 def insert_health_measurement(

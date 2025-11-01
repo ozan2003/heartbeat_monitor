@@ -116,7 +116,9 @@ def parse_args() -> argparse.Namespace:
         epilog="This program requires root privileges to run.",
     )
 
-    parser.add_argument("--bind", default=None, help="Bind to specific IP (optional)")
+    parser.add_argument(
+        "--bind", default=None, help="Bind to specific IP (optional)"
+    )
 
     return parser.parse_args()
 
