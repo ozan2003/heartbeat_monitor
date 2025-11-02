@@ -83,7 +83,7 @@ class LoggingConfig(BaseModel):
 
 
 class ICMPConfig(BaseModel):
-    """Advanced ICMP features (not all may be implemented yet)."""
+    """Advanced ICMP features."""
 
     enable_timestamp: bool = False
     timestamp_interval: int = 60
@@ -170,9 +170,6 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
     Returns:
         The dictionary of the TOML file.
-
-    Raises:
-        SystemExit: If the TOML file is not found.
     """
     with path.open("rb") as f:
         return tomllib.load(f)

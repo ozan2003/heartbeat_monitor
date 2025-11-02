@@ -1,5 +1,12 @@
 """
 Logging utilities for both client and server.
+
+It sets up a shared logger for the entire project.
+
+The logger is configured to log to stdout by default. If `file` is provided,
+it adds a rotating file handler with the given size and retention.
+
+The logger is configured to log to the root logger as well.
 """
 
 from __future__ import annotations
