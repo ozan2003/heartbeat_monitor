@@ -41,11 +41,11 @@ def configure_logging(
 
     logging.basicConfig(
         format=fmt,
-        level=level.upper(),
         datefmt=datefmt,
         stream=sys.stdout if not file else None,
         force=True,
     )
+    logger.setLevel(level.upper())
 
     if file:
         # Add a rotating file handler so logs are persisted and rotated by size.
