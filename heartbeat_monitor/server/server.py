@@ -170,8 +170,6 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopping server.")
-    finally:
-        server.close()
 
 
 if __name__ == "__main__":

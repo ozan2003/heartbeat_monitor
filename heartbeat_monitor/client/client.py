@@ -87,7 +87,7 @@ class ICMPClient:
         """Close the underlying socket and database connection."""
         with contextlib.suppress(OSError):
             self.sock.close()
-            self.logger.debug("ICMP client socket closed")
+            self.logger.debug("Client socket closed")
         close_thread_connection()
 
     def _next_seq(self) -> int:
@@ -375,8 +375,7 @@ def main() -> None:
     config.database.path = config.database.path or DEFAULT_DATABASE_PATH
 
     # Determine logging level precedence: CLI overrides config only if set
-    cli_level = (args.loglevel or "info").upper()
-    level = cli_level if cli_level != "INFO" else config.logging.level
+    level = config.logging.level if args.loglevel is None else args.loglevel
     logger = configure_logging(
         level,
         file=config.logging.file,
@@ -390,7 +389,7 @@ def main() -> None:
     init_database(logger=logger)
     logger.info("Database initialized at %s", config.database.path)
     if config.database.cleanup_days is not None:
-        cleanup_old = int(config.database.cleanup_days)
+        cleanup_old = config.database.cleanup_days
         stats = cleanup_old_data(days=cleanup_old)
         logger.debug("Cleanup executed: %s", stats)
 
@@ -406,16 +405,14 @@ def main() -> None:
 
     # Determine monitoring parameters with precedence (CLI > config > default)
     interval = (
-        float(config.monitoring.interval)
-        if args.interval == 5.0
-        else float(args.interval)
+        config.monitoring.interval if args.interval is None else args.interval
     )
     timeout = (
-        float(config.monitoring.timeout)
-        if float(args.timeout) == float(DEFAULT_TIMEOUT)
-        else float(args.timeout)
+        config.monitoring.timeout
+        if args.timeout == DEFAULT_TIMEOUT
+        else args.timeout
     )
-    count = None if args.count == 0 else max(0, int(args.count))
+    count = None if args.count == 0 else max(0, args.count)
 
     client = ICMPClient(logger=logger, timeout=timeout)
     logger.debug("ICMP client started")
