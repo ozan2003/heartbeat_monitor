@@ -17,9 +17,9 @@ CREATE TABLE IF NOT EXISTS servers (
 CREATE TABLE IF NOT EXISTS health_measurements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     server_id INTEGER NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     server_timestamp REAL,        -- Timestamp from server's health payload
-    rtt_ms REAL,                   -- Round-trip time in milliseconds
+    rtt_ms REAL,                  -- Round-trip time in milliseconds
     cpu_percent REAL,
     memory_percent REAL,
     memory_available_mb REAL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS health_measurements (
 CREATE TABLE IF NOT EXISTS icmp_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     server_id INTEGER NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     event_type TEXT NOT NULL,      -- 'timeout', 'dest_unreachable', 'time_exceeded', etc.
     icmp_type INTEGER,             -- ICMP type code
     icmp_code INTEGER,             -- ICMP code
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS icmp_events (
 CREATE TABLE IF NOT EXISTS timestamp_measurements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     server_id INTEGER NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     originate_ts INTEGER,          -- Client's originate timestamp
     receive_ts INTEGER,            -- Server's receive timestamp
     transmit_ts INTEGER,           -- Server's transmit timestamp
