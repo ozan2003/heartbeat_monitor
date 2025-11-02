@@ -448,7 +448,7 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
         ).fetchone()
 
         total_probes = measurement_count + timeout_count
-        uptime_pct = (
+        uptime_percent = (
             (measurement_count / total_probes * 100) if total_probes > 0 else 0
         )
 
@@ -458,7 +458,7 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
             "total_probes": total_probes,
             "successful_probes": measurement_count,
             "timeouts": timeout_count,
-            "uptime_percent": uptime_pct,
+            "uptime_percent": uptime_percent,
             "avg_rtt_ms": stats["avg_rtt"],
             "min_rtt_ms": stats["min_rtt"],
             "max_rtt_ms": stats["max_rtt"],
