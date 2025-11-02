@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 An ICMP server that listens and responds with health data.
 
@@ -80,14 +79,18 @@ class ICMPServer:
                     self.logger.debug("Frame too short from %s", src_ip)
                     continue
                 if not verify_checksum(frame):
-                    self.logger.debug("Checksum verification failed from %s", src_ip)
+                    self.logger.debug(
+                        "Checksum verification failed from %s", src_ip
+                    )
                     continue
 
                 try:
                     header, _payload = parse_icmp_packet(frame)
                 except (ValueError, OSError):
                     self.logger.error(
-                        "Malformed packet received from %s", src_ip, exc_info=True
+                        "Malformed packet received from %s",
+                        src_ip,
+                        exc_info=True,
                     )
                     continue  # Malformed packet, ignore
 

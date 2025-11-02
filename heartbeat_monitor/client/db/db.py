@@ -40,8 +40,8 @@ from logging import Logger
 from pathlib import Path
 from typing import Any
 
-# Database file path (next to the client script directory)
-CLIENT_DIR = Path(__file__).resolve().parents[1]
+# Database file path (default to module directory)
+CLIENT_DIR = Path(__file__).resolve().parent
 DB_PATH = str(CLIENT_DIR / "heartbeat_monitor.db")
 
 # Thread-local storage for database connections
@@ -126,12 +126,10 @@ def init_database(logger: Logger) -> None:
     conn.execute("PRAGMA foreign_keys=ON")
 
     # Enable WAL mode (persists in database file)
-    logger.debug("Enabling WAL mode")
     result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
     wal_mode = result[0] if result else "unknown"
 
     # Performance tuning
-    logger.debug("Tuning performance")
     conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety/speed with WAL
     conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
     conn.execute("PRAGMA temp_store=MEMORY")  # Keep temp tables in RAM
@@ -145,7 +143,7 @@ def init_database(logger: Logger) -> None:
     logger.debug("Closing database connection")
     conn.close()
 
-    logger.info(
+    logger.debug(
         "Database initialized: path=%s, journal_mode=%s, schema=%s",
         DB_PATH,
         wal_mode,
@@ -552,3 +550,19 @@ def close_thread_connection() -> None:
     if hasattr(_thread_local, "conn") and _thread_local.conn:
         _thread_local.conn.close()
         _thread_local.conn = None
+
+
+def set_db_path(path: str) -> None:
+    """
+    Override the SQLite database file path.
+
+    Call this before any database access/initialization in the process.
+    It closes any existing thread-local connection and updates the global path.
+
+    Args:
+        path: Filesystem path to the SQLite database file.
+    """
+    global DB_PATH  # noqa: PLW0603
+    # Ensure no thread holds an old connection
+    close_thread_connection()
+    DB_PATH = str(Path(path).expanduser().resolve())

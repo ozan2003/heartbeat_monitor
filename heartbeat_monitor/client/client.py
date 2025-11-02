@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 The monitoring client that probes servers and displays results.
 
@@ -27,13 +26,18 @@ import socket
 import struct
 import time
 from logging import Logger, getLevelName
+from pathlib import Path
+from textwrap import dedent
 
 from heartbeat_monitor.client.db import (
+    cleanup_old_data,
     close_thread_connection,
     init_database,
     insert_health_measurement,
     insert_icmp_event,
+    set_db_path,
 )
+from heartbeat_monitor.config import load_config
 from heartbeat_monitor.health_stats import HealthData
 from heartbeat_monitor.icmp_utils import (
     ICMP_PROTO,
@@ -48,6 +52,9 @@ from heartbeat_monitor.icmp_utils import (
 from heartbeat_monitor.logging_utils import configure_logging
 
 DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
+DEFAULT_DATABASE_PATH = str(
+    Path(__file__).resolve().parent / "heartbeat_monitor.db"
+)
 
 
 class ICMPClient:
@@ -113,14 +120,14 @@ class ICMPClient:
         # Without payload
         packet = create_echo_request(self.pid, seq)
         self.logger.debug(
-            "Echo request built for identifier %s and sequence %s",
+            "Echo request built for id %s and seq %s",
             self.pid,
             seq,
         )
         addr = (socket.gethostbyname(host), 0)
         self.logger.debug("Address resolved for %s: %s", host, addr)
         start = time.monotonic()
-        self.logger.debug("Sending echo request to %s:%s", host, seq)
+        self.logger.debug("Sending echo request to %s (seq: %s)", host, seq)
         self.sock.sendto(packet, addr)
         deadline = start + self.timeout
         self.logger.debug("Deadline set for %s seconds", self.timeout)
@@ -291,13 +298,43 @@ def parse_args() -> argparse.Namespace:
     Returns:
         argparse.Namespace: Parsed arguments
     """
+
+    class HelpFormatter(
+        argparse.ArgumentDefaultsHelpFormatter,
+        argparse.RawDescriptionHelpFormatter,
+    ):
+        pass
+
     parser = argparse.ArgumentParser(
         description="ICMP health monitoring client",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        epilog="This program requires root privileges to run.",
+        formatter_class=HelpFormatter,
+        epilog=dedent(
+            """
+            Requires root privileges.
+
+            Configuration:
+            - If --config is not provided, discovery checks in order:
+              1) $HEARTBEAT_MONITOR_CONFIG
+              2) ./config.toml
+              3) ~/.config/heartbeat_monitor/config.toml
+              4) /etc/heartbeat_monitor/config.toml
+
+            - Environment overrides: use HBM_ variables with double underscores to
+              denote nested paths. Examples:
+                HBM_MONITORING__INTERVAL=2.5
+                HBM_SERVERS__0__HOSTNAME=web-1
+                HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db
+
+            - Precedence: CLI > env overrides (HBM_*) > file > built-in defaults.
+            """
+        ),
     )
     parser.add_argument(
         "hosts", nargs="*", default=["127.0.0.1"], help="Target hosts/IPs"
+    )
+    parser.add_argument(
+        "--config",
+        help="Path to TOML config file (overrides discovery)",
     )
     parser.add_argument(
         "-i",
@@ -333,19 +370,58 @@ def main() -> None:
     """Entry point for the ICMP client."""
     args = parse_args()
 
-    logger = configure_logging(args.loglevel)
+    # Load configuration (file or discovery) and configure logging
+    config = load_config(explicit_path=args.config)
+    config.database.path = config.database.path or DEFAULT_DATABASE_PATH
+
+    # Determine logging level precedence: CLI overrides config only if set
+    cli_level = (args.loglevel or "info").upper()
+    level = cli_level if cli_level != "INFO" else config.logging.level
+    logger = configure_logging(
+        level,
+        file=config.logging.file,
+        max_size_mb=config.logging.max_size_mb,
+        backup_count=config.logging.backup_count,
+    )
     logger.debug("Logging now set up to %s", getLevelName(logger.level))
 
+    # Database path, init and optional cleanup
+    set_db_path(config.database.path)
+    init_database(logger=logger)
+    logger.info("Database initialized at %s", config.database.path)
+    if config.database.cleanup_days is not None:
+        cleanup_old = int(config.database.cleanup_days)
+        stats = cleanup_old_data(days=cleanup_old)
+        logger.debug("Cleanup executed: %s", stats)
+
+    # Determine hosts: CLI overrides config if explicitly provided
+    default_hosts = ["127.0.0.1"]
+    cli_hosts = list(args.hosts)
+    config_hosts = [server.hostname or server.ip for server in config.servers]
+    hosts = (
+        cli_hosts
+        if cli_hosts != default_hosts
+        else (config_hosts or cli_hosts)
+    )
+
+    # Determine monitoring parameters with precedence (CLI > config > default)
+    interval = (
+        float(config.monitoring.interval)
+        if args.interval == 5.0
+        else float(args.interval)
+    )
+    timeout = (
+        float(config.monitoring.timeout)
+        if float(args.timeout) == float(DEFAULT_TIMEOUT)
+        else float(args.timeout)
+    )
     count = None if args.count == 0 else max(0, int(args.count))
 
-    init_database(logger=logger)
-    logger.info("Database initialized")
-
-    client = ICMPClient(logger=logger, timeout=float(args.timeout))
+    client = ICMPClient(logger=logger, timeout=timeout)
     logger.debug("ICMP client started")
-    logger.debug("Probing: %s", ", ".join(args.hosts))
+    logger.debug("Probing: %s", ", ".join(hosts))
 
-    client.loop(args.hosts, interval=float(args.interval), count=count)
+    client.loop(hosts, interval=interval, count=count)
 
 
 if __name__ == "__main__":

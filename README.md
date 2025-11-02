@@ -30,7 +30,7 @@ The app saves a small database file so you can look back at past checks.
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.11+
 - `psutil` library
 - SQLite
 

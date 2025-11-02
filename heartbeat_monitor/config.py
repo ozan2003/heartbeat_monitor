@@ -1,0 +1,292 @@
+"""
+Typed configuration loader for the heartbeat monitor.
+
+Loads configuration from TOML with optional environment variable overrides.
+
+Environment override format uses double-underscore path segments with the
+prefix "HBM_".
+
+Examples:
+```
+    HBM_MONITORING__INTERVAL=2.5
+    HBM_SERVERS__0__HOSTNAME=web-1
+    HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db
+```
+
+If a config file path is not explicitly provided, discovery checks these
+locations in order:
+  - `$HEARTBEAT_MONITOR_CONFIG`
+  - `./config.toml`
+  - `~/.config/heartbeat_monitor/config.toml`
+  - `/etc/heartbeat_monitor/config.toml`
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import sys
+import tomllib
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+ENV_PREFIX = "HBM_"
+
+
+class DatabaseConfig(BaseModel):
+    """Database settings."""
+
+    path: str | None = None
+    cleanup_days: int | None = 30
+
+
+class MonitoringConfig(BaseModel):
+    """Global monitoring behavior."""
+
+    interval: float = 10.0
+    timeout: float = 5.0
+    parallel: bool = True
+
+
+class ServerConfig(BaseModel):
+    """A single server to probe."""
+
+    ip: str
+    hostname: str | None = None
+    description: str | None = None
+    interval: float | None = None
+    # Optional future overrides:
+    timeout: float | None = None
+    disabled: bool = False
+    tags: list[str] = Field(default_factory=list)
+
+
+class AlertsConfig(BaseModel):
+    """Alert thresholds and rules."""
+
+    enabled: bool = True
+    cpu_threshold: int = 90
+    memory_threshold: int = 95
+    disk_threshold: int = 90
+    consecutive_timeouts: int = 3
+
+
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    file: str | None = None
+    max_size_mb: int = 10
+    backup_count: int = 5
+
+
+class ICMPConfig(BaseModel):
+    """Advanced ICMP features (not all may be implemented yet)."""
+
+    enable_timestamp: bool = False
+    timestamp_interval: int = 60
+    track_clock_skew: bool = False
+
+
+class ClientConfig(BaseModel):
+    """Top-level configuration schema."""
+
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    servers: list[ServerConfig] = Field(default_factory=list)
+    alerts: AlertsConfig = Field(default_factory=AlertsConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    icmp: ICMPConfig = Field(default_factory=ICMPConfig)
+
+
+def discover_config_path(explicit: str | None = None) -> Path | None:
+    """
+    Find the first existing config path based on precedence.
+
+    Precedence:
+      - Explicit argument
+      - Environment variable `$HEARTBEAT_MONITOR_CONFIG`
+      - XDG config home `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
+      - User config `~/.config/heartbeat_monitor/config.toml`
+      - Local project directory `./config.toml`
+      - System-wide `/etc/heartbeat_monitor/config.toml`
+
+    Args:
+        explicit: Optional explicit path to a config file.
+
+    Returns:
+        The first existing config path or None if no config file is found.
+
+    Raises:
+        SystemExit: If the config file is invalid or unreadable.
+    """
+
+    candidate_paths: list[Path] = []
+
+    # 1) explicit
+    if explicit:
+        candidate_paths.append(Path(explicit).expanduser())
+
+    # 2) env variable
+    env_path = os.environ.get("HEARTBEAT_MONITOR_CONFIG")
+    if env_path:
+        candidate_paths.append(Path(env_path).expanduser())
+
+    # 3) XDG config home
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        candidate_paths.append(
+            Path(xdg_config_home).expanduser()
+            / "heartbeat_monitor"
+            / "config.toml"
+        )
+
+    candidate_paths.extend(
+        [
+            # 4) user config (~/.config)
+            Path.home() / ".config" / "heartbeat_monitor" / "config.toml",
+            # 5) local project directory
+            Path("./config.toml").resolve(),
+            # 6) system-wide
+            Path("/etc/heartbeat_monitor/config.toml"),
+        ]
+    )
+
+    for path in candidate_paths:
+        if path.is_file():
+            return path
+
+    return None
+
+
+def _load_toml(path: Path) -> dict[str, Any]:
+    """
+    Load a TOML file into a dictionary.
+
+    Args:
+        path: The path to the TOML file.
+
+    Returns:
+        The dictionary of the TOML file.
+
+    Raises:
+        SystemExit: If the TOML file is not found.
+    """
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _apply_env_overrides(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Override nested keys with env vars using double-underscore syntax.
+
+    Args:
+        data: The dictionary to override.
+
+    Returns:
+        The overridden dictionary.
+    """
+
+    def set_nested(d: Any, keys: list[str], value: Any) -> None:
+        """
+        Set a nested key in a dictionary.
+
+        Args:
+            d: The dictionary to set the key in.
+            keys: The list of keys to set.
+            value: The value to set.
+        """
+
+        cur = d
+        for k in keys[:-1]:
+            if k.isdigit():
+                idx = int(k)
+
+                if not isinstance(cur, list):
+                    msg = "Env path expects list"
+                    raise ValueError(msg)
+
+                while len(cur) <= idx:
+                    cur.append({})
+
+                cur = cur[idx]
+            else:
+                if not isinstance(cur, dict):
+                    msg = "Env path expects dict"
+                    raise ValueError(msg)
+                cur = cur.setdefault(k.lower(), {})
+
+        last = keys[-1]
+        if last.isdigit():
+            idx = int(last)
+
+            if not isinstance(cur, list):
+                msg = "Env path expects list at final step"
+                raise ValueError(msg)
+
+            while len(cur) <= idx:
+                cur.append(None)
+
+            cur[idx] = value
+
+        elif isinstance(cur, dict):
+            cur[last.lower()] = value
+
+    result: dict[str, Any] = dict(data.items())
+    for key, value in os.environ.items():
+        if not key.startswith(ENV_PREFIX):
+            continue
+        parts = [p for p in key[len(ENV_PREFIX) :].split("__") if p]
+        if not parts:
+            continue
+        v: Any = value
+        if value.lower() in {"true", "false"}:
+            v = value.lower() == "true"
+        else:
+            with contextlib.suppress(ValueError):
+                v = float(value) if "." in value else int(value)
+
+        with contextlib.suppress(Exception):
+            # Ignore malformed overrides; validation will catch issues
+            set_nested(result, parts, v)
+    return result
+
+
+def load_config(explicit_path: str | None = None) -> ClientConfig:
+    """Load configuration from TOML with env overrides and defaults.
+
+    Args:
+        explicit_path: Optional absolute or `~` path to a config file.
+
+    Returns:
+        A validated `ClientConfig` instance.
+
+    Raises:
+        SystemExit: If the config file is invalid or unreadable.
+    """
+
+    path = discover_config_path(explicit_path)
+    raw: dict[str, Any] = {}
+    if path:
+        try:
+            raw = _load_toml(path)
+        except FileNotFoundError as exc:
+            print(f"Failed to read config at {path}: {exc}", file=sys.stderr)
+            raise
+    merged = _apply_env_overrides(raw)
+    return ClientConfig.model_validate(merged)
+
+
+__all__ = [
+    "AlertsConfig",
+    "ClientConfig",
+    "DatabaseConfig",
+    "ICMPConfig",
+    "LoggingConfig",
+    "MonitoringConfig",
+    "ServerConfig",
+    "discover_config_path",
+    "load_config",
+]

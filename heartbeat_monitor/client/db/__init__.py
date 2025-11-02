@@ -29,6 +29,7 @@ from .db import (
     insert_health_measurement,
     insert_icmp_event,
     insert_timestamp_measurement,
+    set_db_path,
     verify_database,
 )
 
@@ -46,5 +47,6 @@ __all__: list[str] = [
     "insert_health_measurement",
     "insert_icmp_event",
     "insert_timestamp_measurement",
+    "set_db_path",
     "verify_database",
 ]

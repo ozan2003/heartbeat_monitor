@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 LOGGER_NAME = "heartbeat_monitor"
 
@@ -13,14 +15,23 @@ LOGGER_NAME = "heartbeat_monitor"
 logger = logging.getLogger(LOGGER_NAME)
 
 
-def configure_logging(level: str) -> logging.Logger:
-    """Configure the shared project logger to log to stdout.
+def configure_logging(
+    level: str,
+    *,
+    file: str | None = None,
+    max_size_mb: int = 10,
+    backup_count: int = 5,
+) -> logging.Logger:
+    """Configure the shared project logger.
 
-    The configuration is idempotent and updates the existing stdout handler
-    if present.
+    Logs to stdout by default. If `file` is provided, adds a rotating file
+    handler with the given size and retention.
 
     Args:
         level: Log level as a string (e.g., "INFO", "DEBUG").
+        file: Optional log file path for rotating file handler.
+        max_size_mb: Max size per log file before rotation.
+        backup_count: Number of rotated files to keep.
 
     Returns:
         logging.Logger: The configured shared logger.
@@ -32,9 +43,22 @@ def configure_logging(level: str) -> logging.Logger:
         format=fmt,
         level=level.upper(),
         datefmt=datefmt,
-        stream=sys.stdout,
+        stream=sys.stdout if not file else None,
         force=True,
     )
+
+    if file:
+        # Add a rotating file handler so logs are persisted and rotated by size.
+        handler = RotatingFileHandler(
+            filename=str(Path(file).expanduser()),
+            maxBytes=max_size_mb * 1024 * 1024,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+        # Attach handler to the root so all loggers propagate to the file.
+        root = logging.getLogger()
+        root.addHandler(handler)
 
     logger.propagate = True
 
