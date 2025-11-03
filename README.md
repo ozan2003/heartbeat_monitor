@@ -8,7 +8,7 @@ This project provides a lightweight way to monitor system health metrics of mult
 (CPU, memory, disk usage) over a network using custom ICMP echo requests and replies. It consists of:
 
 - **ICMP Server**: Listens for ICMP echo requests and responds with encoded system health data.
-- **ICMP Client**: Periodically sends ICMP echo requests to servers, parses replies, and displays health metrics.
+- **ICMP Client**: Periodically sends ICMP echo requests to servers, parses replies and saves the results to a database.
 
 ## Features
 
