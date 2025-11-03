@@ -1,10 +1,10 @@
 # Heartbeat Monitor
 
-A simple client-server heartbeat monitoring tool for system analytics using ICMP packets.
+A simple client-server monitoring tool for system analytics using ICMP packets.
 
 ## Overview
 
-This project provides a lightweight way to monitor system health metrics
+This project provides a lightweight way to monitor system health metrics of multiple servers
 (CPU, memory, disk usage) over a network using custom ICMP echo requests and replies. It consists of:
 
 - **ICMP Server**: Listens for ICMP echo requests and responds with encoded system health data.
@@ -37,7 +37,7 @@ The app saves a small database file so you can look back at past checks.
 ## Usage
 
 For Linux systems, you may need to enable ICMP echo requests if they are disabled by default.
-You can do this by running: `sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1`
+You can do so by running: `sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1`
 
 ### Server
 
@@ -49,10 +49,10 @@ sudo server.py
 
 ### Client
 
-Run the client with root privileges, specifying the server IP address:
+Run the client with root privileges, specifying the config file:
 
 ```bash
-sudo client.py <server_ip>
+sudo client.py --config <config_file>
 ```
 
 ## License
