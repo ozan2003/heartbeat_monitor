@@ -1,6 +1,6 @@
 # Heartbeat Monitor
 
-A simple client-server monitoring tool for system analytics using ICMP packets.
+Lightweight ICMP-based client–server system monitor with configurable probes, network-wide coverage, and local storage.
 
 ## Overview
 
@@ -36,15 +36,18 @@ The app saves a small database file so you can look back at past checks.
 
 ## Usage
 
-For Linux systems, you may need to enable ICMP echo requests if they are disabled by default.
+For Linux systems, you may need to disable kernel ICMP echo requests so
+the server client can receive echo requests with the correct payload.
 You can do so by running: `sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1`
+
+Note: Opening raw ICMP sockets requires elevated privileges (root/admin) or the `CAP_NET_RAW` capability on Linux.
 
 ### Server
 
 Run the server with root privileges:
 
 ```bash
-sudo server.py
+sudo python -m heartbeat_monitor.server.server
 ```
 
 ### Client
@@ -52,8 +55,23 @@ sudo server.py
 Run the client with root privileges, specifying the config file:
 
 ```bash
-sudo client.py --config <config_file>
+sudo python -m heartbeat_monitor.client.client --config ./config.toml
 ```
+
+## Configuration
+
+- Config file discovery (if `--config` is not provided):
+  1. `$HEARTBEAT_MONITOR_CONFIG`
+  2. `./config.toml`
+  3. `~/.config/heartbeat_monitor/config.toml`
+  4. `/etc/heartbeat_monitor/config.toml`
+
+- Environment overrides: set variables with `HBM_` prefix and double underscores for nesting, e.g.:
+  - `HBM_MONITORING__INTERVAL=2.5`
+  - `HBM_SERVERS__0__HOSTNAME=web-1`
+  - `HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db`
+
+- Precedence: CLI > environment overrides (`HBM_*`) > config file > built-in defaults.
 
 ## License
 
