@@ -491,7 +491,7 @@ def get_all_servers() -> list[dict[str, Any]]:
 
 
 # --------------------------- Maintenance operations ---------------------------
-def cleanup_old_data(days: int = 30) -> dict[str, int]:
+def cleanup_old_data(days: int) -> dict[str, int]:
     """
     Delete measurements and events older than N days.
 

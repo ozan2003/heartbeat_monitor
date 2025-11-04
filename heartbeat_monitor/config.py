@@ -32,6 +32,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
+DEFAULT_INTERVAL = 5.0  # Default probe interval in seconds
+
 ENV_PREFIX = "HBM_"
 
 
@@ -45,9 +48,8 @@ class DatabaseConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     """Global monitoring behavior."""
 
-    interval: float = 10.0
-    timeout: float = 5.0
-    parallel: bool = True
+    interval: float = DEFAULT_INTERVAL
+    timeout: float = DEFAULT_TIMEOUT
 
 
 class ServerConfig(BaseModel):
@@ -56,11 +58,6 @@ class ServerConfig(BaseModel):
     ip: str
     hostname: str | None = None
     description: str | None = None
-    interval: float | None = None
-    # Optional future overrides:
-    timeout: float | None = None
-    disabled: bool = False
-    tags: list[str] = Field(default_factory=list)
 
 
 class AlertsConfig(BaseModel):
@@ -82,14 +79,6 @@ class LoggingConfig(BaseModel):
     backup_count: int = 5
 
 
-class ICMPConfig(BaseModel):
-    """Advanced ICMP features."""
-
-    enable_timestamp: bool = False
-    timestamp_interval: int = 60
-    track_clock_skew: bool = False
-
-
 class ClientConfig(BaseModel):
     """Top-level configuration schema."""
 
@@ -98,7 +87,6 @@ class ClientConfig(BaseModel):
     servers: list[ServerConfig] = Field(default_factory=list)
     alerts: AlertsConfig = Field(default_factory=AlertsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    icmp: ICMPConfig = Field(default_factory=ICMPConfig)
 
 
 def discover_config_path(explicit: str | None = None) -> Path | None:
@@ -280,7 +268,6 @@ __all__ = [
     "AlertsConfig",
     "ClientConfig",
     "DatabaseConfig",
-    "ICMPConfig",
     "LoggingConfig",
     "MonitoringConfig",
     "ServerConfig",

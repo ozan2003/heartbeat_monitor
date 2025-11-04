@@ -37,7 +37,11 @@ from heartbeat_monitor.client.db import (
     insert_icmp_event,
     set_db_path,
 )
-from heartbeat_monitor.config import load_config
+from heartbeat_monitor.config import (
+    DEFAULT_INTERVAL,
+    DEFAULT_TIMEOUT,
+    load_config,
+)
 from heartbeat_monitor.health_stats import HealthData
 from heartbeat_monitor.icmp_utils import (
     ICMP_PROTO,
@@ -51,7 +55,6 @@ from heartbeat_monitor.icmp_utils import (
 )
 from heartbeat_monitor.logging_utils import configure_logging
 
-DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 DEFAULT_DATABASE_PATH = str(
     Path(__file__).resolve().parent / "heartbeat_monitor.db"
 )
@@ -340,7 +343,7 @@ def parse_args() -> argparse.Namespace:
         "-i",
         "--interval",
         type=float,
-        default=5.0,
+        default=DEFAULT_INTERVAL,
         help="Probe interval seconds",
     )
     parser.add_argument(
