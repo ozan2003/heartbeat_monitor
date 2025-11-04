@@ -42,7 +42,7 @@ from typing import Any
 
 # Database file path (default to module directory)
 CLIENT_DIR = Path(__file__).resolve().parent
-DB_PATH = str(CLIENT_DIR / "heartbeat_monitor.db")
+db_path = str(CLIENT_DIR / "heartbeat_monitor.db")
 
 # Thread-local storage for database connections
 _thread_local = threading.local()
@@ -60,7 +60,7 @@ def get_thread_connection() -> sqlite3.Connection:
     """
     if not hasattr(_thread_local, "conn") or _thread_local.conn is None:
         _thread_local.conn = sqlite3.connect(
-            DB_PATH,
+            db_path,
             timeout=30.0,  # Wait up to 30s for locks
             isolation_level=None,  # Autocommit mode for better concurrency
             check_same_thread=False,  # We handle thread safety
@@ -121,8 +121,8 @@ def init_database(logger: Logger) -> None:
     schema_sql = schema_path.read_text(encoding="utf-8")
 
     # Create/open database
-    logger.debug("Connecting to database: %s", DB_PATH)
-    conn = sqlite3.connect(DB_PATH)
+    logger.debug("Connecting to database: %s", db_path)
+    conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys=ON")
 
     # Enable WAL mode (persists in database file)
@@ -145,7 +145,7 @@ def init_database(logger: Logger) -> None:
 
     logger.debug(
         "Database initialized: path=%s, journal_mode=%s, schema=%s",
-        DB_PATH,
+        db_path,
         wal_mode,
         schema_path.name,
     )
@@ -194,7 +194,7 @@ def verify_database() -> dict[str, Any]:
             counts[table] = int(cnt_row[0]) if cnt_row else 0
 
         return {
-            "database_path": DB_PATH,
+            "database_path": db_path,
             "journal_mode": journal_mode,
             "tables": tables,
             "indexes": indexes,
@@ -283,7 +283,7 @@ def insert_icmp_event(
     event_type: str,
     icmp_type: int | None = None,
     icmp_code: int | None = None,
-    details: dict | str | None = None,
+    details: dict[str, Any] | str | None = None,
 ) -> None:
     """
     Insert an ICMP event (error, timeout, etc.) into the database.
@@ -562,7 +562,7 @@ def set_db_path(path: str) -> None:
     Args:
         path: Filesystem path to the SQLite database file.
     """
-    global DB_PATH  # noqa: PLW0603
+    global db_path  # noqa: PLW0603
     # Ensure no thread holds an old connection
     close_thread_connection()
-    DB_PATH = str(Path(path).expanduser().resolve())
+    db_path = str(Path(path).expanduser().resolve())

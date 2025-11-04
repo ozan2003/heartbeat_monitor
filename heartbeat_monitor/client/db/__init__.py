@@ -16,9 +16,9 @@ Public API:
 """
 
 from .db import (
-    DB_PATH,
     cleanup_old_data,
     close_thread_connection,
+    db_path,
     get_all_servers,
     get_db_connection,
     get_or_create_server,
@@ -34,9 +34,9 @@ from .db import (
 )
 
 __all__: list[str] = [
-    "DB_PATH",
     "cleanup_old_data",
     "close_thread_connection",
+    "db_path",
     "get_all_servers",
     "get_db_connection",
     "get_or_create_server",
