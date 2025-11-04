@@ -72,9 +72,10 @@ sudo python -m heartbeat_monitor.client.client --config ./config.toml
 
 - Config file discovery (if `--config` is not provided):
   1. `$HEARTBEAT_MONITOR_CONFIG`
-  2. `./config.toml`
-  3. `~/.config/heartbeat_monitor/config.toml`
-  4. `/etc/heartbeat_monitor/config.toml`
+  2. XDG config home: `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
+  3. `./config.toml`
+  4. `~/.config/heartbeat_monitor/config.toml`
+  5. `/etc/heartbeat_monitor/config.toml`
 
 - Precedence: CLI arguments > config file > built-in defaults.
 
