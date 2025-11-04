@@ -70,7 +70,7 @@ class AlertsConfig(BaseModel):
     cpu_threshold: int = Field(90, ge=0, le=100)
     memory_threshold: int = Field(95, ge=0, le=100)
     disk_threshold: int = Field(90, ge=0, le=100)
-    consecutive_timeouts: int = Field(3, ge=0)
+    consecutive_timeouts: int = Field(3, gt=0)
 
     @field_validator("cpu_threshold", "memory_threshold", "disk_threshold")
     def validate_threshold(cls, v: int) -> int:
@@ -83,7 +83,7 @@ class AlertsConfig(BaseModel):
     @field_validator("consecutive_timeouts")
     def validate_consecutive_timeouts(cls, v: int) -> int:
         """Validate the consecutive timeouts."""
-        if v < 0:
+        if v <= 0:
             msg = "Consecutive timeouts must be greater than 0"
             raise ValueError(msg)
         return v
