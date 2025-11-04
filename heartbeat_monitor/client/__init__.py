@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-__all__: list[str] = ["ICMPClient", "db"]
+__all__: list[str] = ["ICMPClient", "db"]  # pyright: ignore[reportUnsupportedDunderAll]
 
 # Make names visible to type checkers without importing at runtime
 if TYPE_CHECKING:
