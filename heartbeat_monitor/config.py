@@ -1,3 +1,4 @@
+# ruff: noqa: N805
 """
 Typed configuration loader for the heartbeat monitor.
 
@@ -16,9 +17,9 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 DEFAULT_INTERVAL = 5.0  # Default probe interval in seconds
@@ -28,14 +29,30 @@ class DatabaseConfig(BaseModel):
     """Database settings."""
 
     path: str | None = None
-    cleanup_days: int | None = 30
+    cleanup_days: int | None = Field(30, ge=0)
 
 
 class MonitoringConfig(BaseModel):
     """Global monitoring behavior."""
 
-    interval: float = DEFAULT_INTERVAL
-    timeout: float = DEFAULT_TIMEOUT
+    interval: float = Field(DEFAULT_INTERVAL, gt=0)
+    timeout: float = Field(DEFAULT_TIMEOUT, gt=0)
+
+    @field_validator("interval")
+    def validate_interval(cls, v: float) -> float:
+        """Validate the interval."""
+        if v <= 0:
+            msg = "Interval must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("timeout")
+    def validate_timeout(cls, v: float) -> float:
+        """Validate the timeout."""
+        if v <= 0:
+            msg = "Timeout must be greater than 0"
+            raise ValueError(msg)
+        return v
 
 
 class ServerConfig(BaseModel):
@@ -50,10 +67,26 @@ class AlertsConfig(BaseModel):
     """Alert thresholds and rules."""
 
     enabled: bool = True
-    cpu_threshold: int = 90
-    memory_threshold: int = 95
-    disk_threshold: int = 90
-    consecutive_timeouts: int = 3
+    cpu_threshold: int = Field(90, ge=0, le=100)
+    memory_threshold: int = Field(95, ge=0, le=100)
+    disk_threshold: int = Field(90, ge=0, le=100)
+    consecutive_timeouts: int = Field(3, ge=0)
+
+    @field_validator("cpu_threshold", "memory_threshold", "disk_threshold")
+    def validate_threshold(cls, v: int) -> int:
+        """Validate the thresholds."""
+        if v < 0 or v > 100:
+            msg = "Threshold must be between 0 and 100"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("consecutive_timeouts")
+    def validate_consecutive_timeouts(cls, v: int) -> int:
+        """Validate the consecutive timeouts."""
+        if v < 0:
+            msg = "Consecutive timeouts must be greater than 0"
+            raise ValueError(msg)
+        return v
 
 
 class LoggingConfig(BaseModel):
@@ -61,18 +94,28 @@ class LoggingConfig(BaseModel):
 
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     file: str | None = None
-    max_size_mb: int = 10
-    backup_count: int = 5
+    max_size_mb: int = Field(10, ge=0)
+    backup_count: int = Field(5, ge=0)
+
+    @field_validator("max_size_mb", "backup_count")
+    def validate_size(cls, v: int) -> int:
+        """Validate the size."""
+        if v < 0:
+            msg = "Size must be greater than 0"
+            raise ValueError(msg)
+        return v
 
 
 class ClientConfig(BaseModel):
     """Top-level configuration schema."""
 
-    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
-    servers: list[ServerConfig] = Field(default_factory=list)
-    alerts: AlertsConfig = Field(default_factory=AlertsConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    database: Annotated[DatabaseConfig, Field(default_factory=DatabaseConfig)]
+    monitoring: Annotated[
+        MonitoringConfig, Field(default_factory=MonitoringConfig)
+    ]
+    servers: Annotated[list[ServerConfig], Field(default_factory=list)]
+    alerts: Annotated[AlertsConfig, Field(default_factory=AlertsConfig)]
+    logging: Annotated[LoggingConfig, Field(default_factory=LoggingConfig)]
 
 
 def discover_config_path(explicit: str | None = None) -> Path | None:
