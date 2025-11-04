@@ -76,12 +76,7 @@ sudo python -m heartbeat_monitor.client.client --config ./config.toml
   3. `~/.config/heartbeat_monitor/config.toml`
   4. `/etc/heartbeat_monitor/config.toml`
 
-- Environment overrides: set variables with `HBM_` prefix and double underscores for nesting, e.g.:
-  - `HBM_MONITORING__INTERVAL=2.5`
-  - `HBM_SERVERS__0__HOSTNAME=web-1`
-  - `HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db`
-
-- Precedence: CLI > environment overrides (`HBM_*`) > config file > built-in defaults.
+- Precedence: CLI arguments > config file > built-in defaults.
 
 ## License
 

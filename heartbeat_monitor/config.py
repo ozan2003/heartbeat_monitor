@@ -1,17 +1,7 @@
 """
 Typed configuration loader for the heartbeat monitor.
 
-Loads configuration from TOML with optional environment variable overrides.
-
-Environment override format uses double-underscore path segments with the
-prefix "HBM_".
-
-Examples:
-```
-    HBM_MONITORING__INTERVAL=2.5
-    HBM_SERVERS__0__HOSTNAME=web-1
-    HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db
-```
+Loads configuration exclusively from a TOML file.
 
 If a config file path is not explicitly provided, discovery checks these
 locations in order:
@@ -23,9 +13,7 @@ locations in order:
 
 from __future__ import annotations
 
-import contextlib
 import os
-import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
@@ -34,8 +22,6 @@ from pydantic import BaseModel, Field
 
 DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
 DEFAULT_INTERVAL = 5.0  # Default probe interval in seconds
-
-ENV_PREFIX = "HBM_"
 
 
 class DatabaseConfig(BaseModel):
@@ -163,84 +149,8 @@ def _load_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(f)
 
 
-def _apply_env_overrides(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    Override nested keys with env vars using double-underscore syntax.
-
-    Args:
-        data: The dictionary to override.
-
-    Returns:
-        The overridden dictionary.
-    """
-
-    def set_nested(d: Any, keys: list[str], value: Any) -> None:
-        """
-        Set a nested key in a dictionary.
-
-        Args:
-            d: The dictionary to set the key in.
-            keys: The list of keys to set.
-            value: The value to set.
-        """
-
-        cur = d
-        for k in keys[:-1]:
-            if k.isdigit():
-                idx = int(k)
-
-                if not isinstance(cur, list):
-                    msg = "Env path expects list"
-                    raise ValueError(msg)
-
-                while len(cur) <= idx:
-                    cur.append({})
-
-                cur = cur[idx]
-            else:
-                if not isinstance(cur, dict):
-                    msg = "Env path expects dict"
-                    raise ValueError(msg)
-                cur = cur.setdefault(k.lower(), {})
-
-        last = keys[-1]
-        if last.isdigit():
-            idx = int(last)
-
-            if not isinstance(cur, list):
-                msg = "Env path expects list at final step"
-                raise ValueError(msg)
-
-            while len(cur) <= idx:
-                cur.append(None)
-
-            cur[idx] = value
-
-        elif isinstance(cur, dict):
-            cur[last.lower()] = value
-
-    result: dict[str, Any] = dict(data.items())
-    for key, value in os.environ.items():
-        if not key.startswith(ENV_PREFIX):
-            continue
-        parts = [p for p in key[len(ENV_PREFIX) :].split("__") if p]
-        if not parts:
-            continue
-        v: Any = value
-        if value.lower() in {"true", "false"}:
-            v = value.lower() == "true"
-        else:
-            with contextlib.suppress(ValueError):
-                v = float(value) if "." in value else int(value)
-
-        with contextlib.suppress(Exception):
-            # Ignore malformed overrides; validation will catch issues
-            set_nested(result, parts, v)
-    return result
-
-
 def load_config(explicit_path: str | None = None) -> ClientConfig:
-    """Load configuration from TOML with env overrides and defaults.
+    """Load configuration from TOML file.
 
     Args:
         explicit_path: Optional absolute or `~` path to a config file.
@@ -253,15 +163,16 @@ def load_config(explicit_path: str | None = None) -> ClientConfig:
     """
 
     path = discover_config_path(explicit_path)
-    raw: dict[str, Any] = {}
-    if path:
-        try:
-            raw = _load_toml(path)
-        except FileNotFoundError as exc:
-            print(f"Failed to read config at {path}: {exc}", file=sys.stderr)
-            raise
-    merged = _apply_env_overrides(raw)
-    return ClientConfig.model_validate(merged)
+    if not path:
+        msg = "No config file found"
+        raise FileNotFoundError(msg)
+    try:
+        toml_config = _load_toml(path)
+    except FileNotFoundError as exc:
+        msg = f"Failed to read config file at {path}"
+        exc.add_note(msg)
+        raise
+    return ClientConfig.model_validate(toml_config)
 
 
 __all__ = [

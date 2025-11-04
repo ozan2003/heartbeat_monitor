@@ -322,13 +322,7 @@ def parse_args() -> argparse.Namespace:
               3) ~/.config/heartbeat_monitor/config.toml
               4) /etc/heartbeat_monitor/config.toml
 
-            - Environment overrides: use HBM_ variables with double underscores to
-              denote nested paths. Examples:
-                HBM_MONITORING__INTERVAL=2.5
-                HBM_SERVERS__0__HOSTNAME=web-1
-                HBM_DATABASE__PATH=/var/lib/heartbeat/heartbeat_monitor.db
-
-            - Precedence: CLI > env overrides (HBM_*) > file > built-in defaults.
+            - Precedence: CLI arguments > config file > built-in defaults.
             """
         ),
     )
