@@ -1,4 +1,4 @@
-# Heartbeat Monitor — TOML Configuration
+# Heartbeat Monitor - TOML Configuration
 
 This document describes the TOML configuration format for the Heartbeat Monitor.
 
