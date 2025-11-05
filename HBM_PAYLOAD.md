@@ -47,14 +47,13 @@ Receivers must perform the following checks before trusting the data:
 - Verify payload length is exactly 28 bytes.
 - Unpack using `!B3sdffff` and check:
   - `magic == b"HBM"`
-  - `version == 1` (reject or handle via compatibility policy if different)
+  - `version == 2` (reject or handle via compatibility policy if different)
 - Treat NaN/Inf floats as invalid data.
 - Percent fields are logically in [0, 100]; implementations may clamp or reject out-of-range values.
 
 ## Versioning and Compatibility
 
 - `version` is the first byte to allow early gating.
-- Version `1` is defined by this document.
 - Future versions must retain the `magic` and use a distinct `version`. Backward compatibility is not guaranteed unless explicitly stated.
 
 ## ICMP Integration
