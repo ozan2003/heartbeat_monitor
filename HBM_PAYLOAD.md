@@ -9,7 +9,7 @@ This document specifies the binary format used by Heartbeat Monitor for encoding
 - **Struct format string**: `!B3sdffff`
 - **Total payload size**: 28 bytes
 - **Magic**: ASCII `HBM` to identify the protocol
-- **Version**: 1 (as of this document)
+- **Version**: 2
 
 ## Field Layout
 
