@@ -117,7 +117,6 @@ class ClientConfig(BaseModel):
     alerts: Annotated[AlertsConfig, Field(default_factory=AlertsConfig)]
     logging: Annotated[LoggingConfig, Field(default_factory=LoggingConfig)]
 
-
 def discover_config_path(explicit: str | None = None) -> Path | None:
     """
     Find the first existing config path based on precedence.
@@ -200,21 +199,13 @@ def load_config(explicit_path: str | None = None) -> ClientConfig:
 
     Returns:
         A validated `ClientConfig` instance.
-
-    Raises:
-        SystemExit: If the config file is invalid or unreadable.
     """
 
     path = discover_config_path(explicit_path)
     if not path:
-        msg = "No config file found"
-        raise FileNotFoundError(msg)
-    try:
-        toml_config = _load_toml(path)
-    except FileNotFoundError as exc:
-        msg = f"Failed to read config file at {path}"
-        exc.add_note(msg)
-        raise
+        return ClientConfig() # type: ignore
+
+    toml_config = _load_toml(path)
     return ClientConfig.model_validate(toml_config)
 
 

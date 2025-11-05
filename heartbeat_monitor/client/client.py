@@ -332,6 +332,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         help="Path to TOML config file (overrides discovery)",
+        default=None,
     )
     parser.add_argument(
         "-i",

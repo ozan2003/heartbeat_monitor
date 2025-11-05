@@ -16,11 +16,10 @@ Binary health monitoring format:
     - Memory available MB (4 bytes float): Available memory in MB
     - Disk percent (4 bytes float): Disk usage percentage
 
-Format string: '!3sxBdffff'
+Format string: '!B3sdffff'
     - ! = network byte order (big-endian)
-    - 3s = 3 bytes string (magic)
-    - x = 1 byte padding (to align to 4-byte boundary)
     - B = 1 byte unsigned char (version)
+    - 3s = 3 bytes string (magic)
     - d = 8 bytes double (timestamp)
     - f = 4 bytes float (cpu)
     - f = 4 bytes float (memory percent)
@@ -39,11 +38,11 @@ from typing import Any, NamedTuple
 from heartbeat_monitor.health_stats import HealthData
 
 # Constants for health data encoding/decoding
-HEALTH_FMT = "!3sxBdffff"
+HEALTH_FMT = "!B3sdffff"
 HEALTH_STRUCT = struct.Struct(HEALTH_FMT)
 HEALTH_SIZE = HEALTH_STRUCT.size
 
-VERSION = 1  # Protocol version for payload format
+VERSION = 2  # Protocol version for payload format
 MAGIC = b"HBM"  # Magic bytes to identify our protocol in payload
 
 # Constants for ICMP
@@ -480,8 +479,8 @@ def encode_health_data(
     disk_percent = health_dict["disk"]["percent"]
 
     return HEALTH_STRUCT.pack(
-        MAGIC,
         VERSION,
+        MAGIC,
         timestamp,
         cpu_percent,
         memory_percent,
@@ -509,7 +508,7 @@ def decode_health_data(payload: bytes) -> HealthData:
         raise ValueError(msg)
 
     # Unpack the binary data
-    magic, version, timestamp, cpu, mem_percent, mem_avail_mb, disk = (
+    version, magic, timestamp, cpu, mem_percent, mem_avail_mb, disk = (
         HEALTH_STRUCT.unpack(payload[:HEALTH_SIZE])
     )
 
