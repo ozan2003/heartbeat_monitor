@@ -45,8 +45,26 @@ HEALTH_SIZE = HEALTH_STRUCT.size
 VERSION = 2  # Protocol version for payload format
 MAGIC = b"HBM"  # Magic bytes to identify our protocol in payload
 
+"""
+ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
+                    rest-of-header (4 bytes)
+
+Checksum, ID and sequence numbers matter for echo requests/replies.
+Other message types use the 4-byte rest-of-header interpreted differently.
+
+See RFC 792 for details.
+"""
+ICMP_FMT = "!BBH4s"
+ICMP_STRUCT = struct.Struct(ICMP_FMT)
+ICMP_SIZE = ICMP_STRUCT.size
+
+_IPV4_HEADER_SIZE = 20
+_IPV4_MAX_TOTAL_LENGTH = 2**16 - 1
+
 # Constants for ICMP
 ICMP_PROTO = socket.IPPROTO_ICMP
+ICMP_MAX_SIZE = _IPV4_MAX_TOTAL_LENGTH - (ICMP_SIZE + _IPV4_HEADER_SIZE)
+ICMP_ERROR_MAX_SIZE = 576  # As stated in RFC 1812
 
 
 class ICMPTypes(IntEnum):
@@ -99,20 +117,6 @@ PARAMETER_PROBLEM_DESC: dict[int, str] = {
     1: "Missing a required option",
     2: "Bad length",
 }
-
-
-"""
-ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
-                    rest-of-header (4 bytes)
-
-Checksum, ID and sequence numbers matter for echo requests/replies.
-Other message types use the 4-byte rest-of-header interpreted differently.
-
-See RFC 792 for details.
-"""
-ICMP_FMT = "!BBH4s"
-ICMP_STRUCT = struct.Struct(ICMP_FMT)
-ICMP_SIZE = ICMP_STRUCT.size
 
 
 class ICMPHeader(NamedTuple):
@@ -335,7 +339,28 @@ def create_icmp_packet(
 
     Returns:
         bytes: The complete ICMP packet (header + payload).
+
+    Raises:
+        ValueError: If the packet is too large or the rest-of-header is not 4 bytes.
     """
+
+    def is_error(icmp_type: int) -> bool:
+        """
+        Check if the ICMP header is for an error.
+
+        Args:
+            icmp_type (int): The ICMP type to check.
+
+        Returns:
+            bool: True if Error; otherwise False.
+        """
+        return icmp_type in (
+            ICMPTypes.DESTINATION_UNREACHABLE.value,
+            ICMPTypes.REDIRECT.value,
+            ICMPTypes.TIME_EXCEEDED.value,
+            ICMPTypes.PARAMETER_PROBLEM.value,
+        )
+
     if len(rest) != 4:
         msg = "ICMP rest-of-header must be exactly 4 bytes"
         raise ValueError(msg)
@@ -347,6 +372,16 @@ def create_icmp_packet(
 
     # Calculate checksum over header + payload
     packet = header + payload
+
+    if is_error(icmp_type):
+        if len(packet) > ICMP_ERROR_MAX_SIZE:
+            msg = "ICMP error packet too large"
+            raise ValueError(msg)
+    elif len(packet) > ICMP_MAX_SIZE:
+        msg = "ICMP packet too large"
+        raise ValueError(msg)
+
+
     checksum = calculate_checksum(packet)
 
     # Rebuild the packet with correct checksum
