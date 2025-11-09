@@ -58,12 +58,28 @@ ICMP_FMT = "!BBH4s"
 ICMP_STRUCT = struct.Struct(ICMP_FMT)
 ICMP_SIZE = ICMP_STRUCT.size
 
-_IPV4_HEADER_SIZE = 20
-_IPV4_MAX_TOTAL_LENGTH = 2**16 - 1
+# TODO: We can take IHL into account if we want to be more precise
+_IPV4_HEADER_SIZE = 20  # 20 is assumed default
+_IPV4_PACKET_MAX_TOTAL_LENGTH = 2**16 - 1
 
 # Constants for ICMP
 ICMP_PROTO = socket.IPPROTO_ICMP
-ICMP_MAX_SIZE = _IPV4_MAX_TOTAL_LENGTH - (ICMP_SIZE + _IPV4_HEADER_SIZE)
+"""
+IPv4 sizing assumptions:
+- _IPV4_HEADER_SIZE is 20 bytes when no IP options are present (IHL = 5).
+
+- ICMP_MAX_SEGMENT_NO_IP_OPTIONS is the maximum ICMP bytes (header + payload)
+  that still fit under the IPv4 Total Length limit (65535) with a 20-byte IP header.
+
+- ICMP_MAX_PAYLOAD_NO_IP_OPTIONS is just the payload limit; equals 65535 - 20 - 8.
+
+- ICMP_ERROR_MAX_SIZE comes from RFC 1812 and refers to the entire IP packet size;
+  our validation subtracts the IP header to compare against the ICMP segment.
+"""
+ICMP_MAX_SEGMENT_NO_IP_OPTIONS = (
+    _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_HEADER_SIZE
+)
+ICMP_MAX_PAYLOAD_NO_IP_OPTIONS = ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
 ICMP_ERROR_MAX_SIZE = 576  # As stated in RFC 1812
 
 
@@ -374,13 +390,17 @@ def create_icmp_packet(
     packet = header + payload
 
     if is_error(icmp_type):
-        if len(packet) > ICMP_ERROR_MAX_SIZE:
+        # RFC 1812 size includes the IP header; compare against ICMP segment only
+        if len(packet) > (ICMP_ERROR_MAX_SIZE - _IPV4_HEADER_SIZE):
             msg = "ICMP error packet too large"
             raise ValueError(msg)
-    elif len(packet) > ICMP_MAX_SIZE:
-        msg = "ICMP packet too large"
+    elif len(payload) > ICMP_MAX_PAYLOAD_NO_IP_OPTIONS:
+        # Enforce absolute IPv4 payload limit (no IP options)
+        msg = (
+            f"ICMP payload too large for IPv4: {len(payload)}"
+            f" > {ICMP_MAX_PAYLOAD_NO_IP_OPTIONS}"
+        )
         raise ValueError(msg)
-
 
     checksum = calculate_checksum(packet)
 
