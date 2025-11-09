@@ -117,6 +117,7 @@ class ClientConfig(BaseModel):
     alerts: Annotated[AlertsConfig, Field(default_factory=AlertsConfig)]
     logging: Annotated[LoggingConfig, Field(default_factory=LoggingConfig)]
 
+
 def discover_config_path(explicit: str | None = None) -> Path | None:
     """
     Find the first existing config path based on precedence.
@@ -203,7 +204,7 @@ def load_config(explicit_path: str | None = None) -> ClientConfig:
 
     path = discover_config_path(explicit_path)
     if not path:
-        return ClientConfig() # type: ignore
+        return ClientConfig()  # type: ignore
 
     toml_config = _load_toml(path)
     return ClientConfig.model_validate(toml_config)

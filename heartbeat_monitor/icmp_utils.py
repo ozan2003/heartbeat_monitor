@@ -505,7 +505,7 @@ def verify_checksum(packet: bytes) -> bool:
 
     zeroed = packet[:2] + b"\x00\x00" + packet[4:]
     calc = calculate_checksum(zeroed)
-    return calc == original
+    return calc == int(original)
 
 
 # ------------------- Health payload encode/decode -------------------
