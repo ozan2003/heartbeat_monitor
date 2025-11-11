@@ -59,14 +59,14 @@ ICMP_STRUCT = struct.Struct(ICMP_FMT)
 ICMP_SIZE = ICMP_STRUCT.size
 
 # TODO: We can take IHL into account if we want to be more precise
-_IPV4_HEADER_SIZE = 20  # 20 is assumed default
+_IPV4_MIN_HEADER_SIZE = 20  # 20 is assumed default
 _IPV4_PACKET_MAX_TOTAL_LENGTH = 2**16 - 1
 
 # Constants for ICMP
 ICMP_PROTO = socket.IPPROTO_ICMP
 """
 IPv4 sizing assumptions:
-- _IPV4_HEADER_SIZE is 20 bytes when no IP options are present (IHL = 5).
+- _IPV4_MIN_HEADER_SIZE is 20 bytes when no IP options are present (IHL = 5).
 
 - ICMP_MAX_SEGMENT_NO_IP_OPTIONS is the maximum ICMP bytes (header + payload)
   that still fit under the IPv4 Total Length limit (65535) with a 20-byte IP header.
@@ -77,7 +77,7 @@ IPv4 sizing assumptions:
   our validation subtracts the IP header to compare against the ICMP segment.
 """
 ICMP_MAX_SEGMENT_NO_IP_OPTIONS = (
-    _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_HEADER_SIZE
+    _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_MIN_HEADER_SIZE
 )
 ICMP_MAX_PAYLOAD_NO_IP_OPTIONS = ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
 ICMP_ERROR_MAX_SIZE = 576  # As stated in RFC 1812
@@ -391,7 +391,7 @@ def create_icmp_packet(
 
     if is_error(icmp_type):
         # RFC 1812 size includes the IP header; compare against ICMP segment only
-        if len(packet) > (ICMP_ERROR_MAX_SIZE - _IPV4_HEADER_SIZE):
+        if len(packet) > (ICMP_ERROR_MAX_SIZE - _IPV4_MIN_HEADER_SIZE):
             msg = "ICMP error packet too large"
             raise ValueError(msg)
     elif len(payload) > ICMP_MAX_PAYLOAD_NO_IP_OPTIONS:
@@ -628,10 +628,13 @@ def strip_ipv4_header_if_present(data: bytes) -> bytes:
         Bytes that begin at the ICMP header (type/code) if an IPv4 header was
         present and could be stripped; otherwise the original data.
     """
-    if len(data) >= 20 and (data[0] >> 4) == 4:
-        ihl = (data[0] & 0x0F) * 4
-        if len(data) >= ihl + 8:  # at least IP + ICMP header
-            return data[ihl:]
+    ip_version = data[0] >> 4  # high nibble of the first byte
+
+    if len(data) >= _IPV4_MIN_HEADER_SIZE and ip_version == 4:
+        # exctract the lower nibble
+        ihl_bytes = (data[0] & 0x0F) * 4  # in bytes, multiply by 32 for bits
+        if len(data) >= ihl_bytes + ICMP_SIZE:  # at least IP + ICMP header
+            return data[ihl_bytes:]
     return data
 
 
@@ -651,12 +654,18 @@ def extract_quoted_echo_identifiers(payload: bytes) -> tuple[int, int] | None:
     """
     idents = None
 
-    # Must at least contain an IPv4 header
-    if len(payload) >= 20 and (payload[0] >> 4) == 4:
-        ihl = (payload[0] & 0x0F) * 4
+    ip_version = payload[0] >> 4
 
-        if ihl >= 20 and len(payload) >= ihl + 8:
-            inner = payload[ihl : ihl + 8]
+    # Must at least contain an IPv4 header
+    if len(payload) >= _IPV4_MIN_HEADER_SIZE and ip_version == 4:
+        # in bytes, multiply by 32 for bits
+        ihl_bytes = (payload[0] & 0x0F) * 4
+
+        if (
+            ihl_bytes >= _IPV4_MIN_HEADER_SIZE
+            and len(payload) >= ihl_bytes + 8
+        ):
+            inner = payload[ihl_bytes : ihl_bytes + 8]
 
             try:
                 t, _c, _chk, rest = ICMP_STRUCT.unpack(inner)
