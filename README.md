@@ -47,7 +47,7 @@ The app saves a small database file so you can look back at past checks.
 ## Usage
 
 For Linux systems, you may need to disable kernel ICMP echo requests so
-the server client can receive echo requests with the correct payload.
+the server and client can receive echo requests with the correct payload.
 You can do so by running: `sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1`
 
 Note: Opening raw ICMP sockets requires elevated privileges (root/admin) or the `CAP_NET_RAW` capability on Linux.
