@@ -83,6 +83,36 @@ ICMP_MAX_PAYLOAD_NO_IP_OPTIONS = ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
 ICMP_ERROR_MAX_SIZE = 576  # As stated in RFC 1812
 
 
+def ipv4_header_len_from_options_len(options_len: int) -> int:
+    """Compute IPv4 header length in bytes given options length.
+
+    Args:
+        options_len: Length of IPv4 options in bytes (0..40).
+
+    Returns:
+        The IPv4 header length in bytes (20..60), padded to a multiple of 4.
+    """
+    options_len = max(options_len, 0)
+    options_len = min(options_len, 40)
+    padded = (options_len + 3) & ~3
+    return _IPV4_MIN_HEADER_SIZE + padded
+
+
+def icmp_max_payload_for_ip_header(ip_header_bytes: int) -> int:
+    """Return maximum ICMP payload for a given IPv4 header length.
+
+    Args:
+        ip_header_bytes: IPv4 header length in bytes (must be 20..60 and multiple of 4).
+
+    Returns:
+        Maximum payload size in bytes that fits within IPv4 Total Length limits.
+    """
+    if not (20 <= ip_header_bytes <= 60) or (ip_header_bytes % 4 != 0):
+        msg = "ip_header_bytes must be in [20, 60] and a multiple of 4"
+        raise ValueError(msg)
+    return _IPV4_PACKET_MAX_TOTAL_LENGTH - ip_header_bytes - ICMP_SIZE
+
+
 class ICMPTypes(IntEnum):
     """
     Types for ICMP headers.
@@ -342,7 +372,12 @@ def calculate_checksum(data: bytes) -> int:
 
 
 def create_icmp_packet(
-    icmp_type: int, icmp_code: int, rest: bytes, *, payload: bytes = b""
+    icmp_type: int,
+    icmp_code: int,
+    rest: bytes,
+    *,
+    payload: bytes = b"",
+    ip_header_bytes: int = _IPV4_MIN_HEADER_SIZE,
 ) -> bytes:
     """
     Create an ICMP packet with the given parameters.
@@ -352,6 +387,7 @@ def create_icmp_packet(
         icmp_code (int): ICMP code (varies per type).
         rest (bytes): 4-byte type-specific data for the ICMP header.
         payload (bytes): Optional payload data.
+        ip_header_bytes (int): IPv4 header size in bytes (20..60, multiple of 4).
 
     Returns:
         bytes: The complete ICMP packet (header + payload).
@@ -381,26 +417,32 @@ def create_icmp_packet(
         msg = "ICMP rest-of-header must be exactly 4 bytes"
         raise ValueError(msg)
 
-    checksum = 0  # To be calculated later.
+    # Validate IPv4 header size constraint if caller specifies non-defaults
+    if not (20 <= ip_header_bytes <= 60) or (ip_header_bytes % 4 != 0):
+        msg = "ip_header_bytes must be in [20, 60] and a multiple of 4"
+        raise ValueError(msg)
 
-    # Pack header with zero checksum initially
-    header = ICMP_STRUCT.pack(icmp_type, icmp_code, checksum, rest)
-
-    # Calculate checksum over header + payload
+    # Build header with zero checksum
+    header = ICMP_STRUCT.pack(icmp_type, icmp_code, 0, rest)
     packet = header + payload
+    segment_len = len(packet)
 
     if is_error(icmp_type):
-        # RFC 1812 size includes the IP header; compare against ICMP segment only
-        if len(packet) > (ICMP_ERROR_MAX_SIZE - _IPV4_MIN_HEADER_SIZE):
+        # Absolute IPv4 total-length bound
+        abs_limit = _IPV4_PACKET_MAX_TOTAL_LENGTH - ip_header_bytes
+        if segment_len > abs_limit:
+            msg = "ICMP error packet too large for IPv4"
+            raise ValueError(msg)
+        # RFC 1812 limit (576-byte), compare ICMP segment only
+        rfc_limit = ICMP_ERROR_MAX_SIZE - ip_header_bytes
+        if segment_len > rfc_limit:
             msg = "ICMP error packet too large"
             raise ValueError(msg)
-    elif len(payload) > ICMP_MAX_PAYLOAD_NO_IP_OPTIONS:
-        # Enforce absolute IPv4 payload limit (no IP options)
-        msg = (
-            f"ICMP payload too large for IPv4: {len(payload)}"
-            f" > {ICMP_MAX_PAYLOAD_NO_IP_OPTIONS}"
-        )
-        raise ValueError(msg)
+    else:
+        max_payload = icmp_max_payload_for_ip_header(ip_header_bytes)
+        if len(payload) > max_payload:
+            msg = f"ICMP payload too large for IPv4: {len(payload)} > {max_payload}"
+            raise ValueError(msg)
 
     checksum = calculate_checksum(packet)
 
@@ -424,7 +466,13 @@ def _echo_rest(_id: int, seq_num: int) -> bytes:
     return struct.pack("!HH", _id & 0xFFFF, seq_num & 0xFFFF)
 
 
-def create_echo_request(_id: int, seq: int, *, payload: bytes = b"") -> bytes:
+def create_echo_request(
+    _id: int,
+    seq: int,
+    *,
+    payload: bytes = b"",
+    ip_header_bytes: int | None = None,
+) -> bytes:
     """
     Create an ICMP Echo Request packet.
 
@@ -432,16 +480,32 @@ def create_echo_request(_id: int, seq: int, *, payload: bytes = b"") -> bytes:
         _id (int): Identifier to match requests and replies.
         seq (int): Sequence number to match requests and replies.
         payload (bytes): Payload data to include in the packet.
+        ip_header_bytes (int | None): Optional IPv4 header size override.
 
     Returns:
         bytes: The complete ICMP Echo Request packet (header + payload).
     """
+    effective_ihl = (
+        ip_header_bytes
+        if ip_header_bytes is not None
+        else _IPV4_MIN_HEADER_SIZE
+    )
     return create_icmp_packet(
-        ICMPTypes.ECHO_REQUEST.value, 0, _echo_rest(_id, seq), payload=payload
+        ICMPTypes.ECHO_REQUEST.value,
+        0,
+        _echo_rest(_id, seq),
+        payload=payload,
+        ip_header_bytes=effective_ihl,
     )
 
 
-def create_echo_reply(_id: int, seq: int, *, payload: bytes) -> bytes:
+def create_echo_reply(
+    _id: int,
+    seq: int,
+    *,
+    payload: bytes,
+    ip_header_bytes: int | None = None,
+) -> bytes:
     """
     Create an ICMP Echo Reply packet.
 
@@ -449,12 +513,22 @@ def create_echo_reply(_id: int, seq: int, *, payload: bytes) -> bytes:
         _id (int): Identifier to match requests and replies.
         seq (int): Sequence number to match requests and replies.
         payload (bytes): Payload data to include in the packet.
+        ip_header_bytes (int | None): Optional IPv4 header size override.
 
     Returns:
         bytes: The complete ICMP Echo Reply packet (header + payload).
     """
+    effective_ihl = (
+        ip_header_bytes
+        if ip_header_bytes is not None
+        else _IPV4_MIN_HEADER_SIZE
+    )
     return create_icmp_packet(
-        ICMPTypes.ECHO_REPLY.value, 0, _echo_rest(_id, seq), payload=payload
+        ICMPTypes.ECHO_REPLY.value,
+        0,
+        _echo_rest(_id, seq),
+        payload=payload,
+        ip_header_bytes=effective_ihl,
     )
 
 
