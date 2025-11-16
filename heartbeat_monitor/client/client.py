@@ -28,6 +28,7 @@ import time
 from logging import Logger, getLevelName
 from pathlib import Path
 from textwrap import dedent
+from typing import Final
 
 from heartbeat_monitor.client.db import (
     cleanup_old_data,
@@ -55,7 +56,7 @@ from heartbeat_monitor.icmp_utils import (
 )
 from heartbeat_monitor.logging_utils import configure_logging
 
-DEFAULT_DATABASE_PATH = str(
+DEFAULT_DATABASE_PATH: Final[str] = str(
     Path(__file__).resolve().parent / "heartbeat_monitor.db"
 )
 

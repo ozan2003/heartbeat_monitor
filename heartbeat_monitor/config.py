@@ -17,12 +17,12 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-DEFAULT_TIMEOUT = 1.0  # Per-request timeout in seconds
-DEFAULT_INTERVAL = 5.0  # Default probe interval in seconds
+DEFAULT_TIMEOUT: Final[float] = 1.0  # Per-request timeout in seconds
+DEFAULT_INTERVAL: Final[float] = 5.0  # Default probe interval in seconds
 
 
 class DatabaseConfig(BaseModel):

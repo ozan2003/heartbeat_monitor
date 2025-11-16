@@ -15,8 +15,9 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Final
 
-LOGGER_NAME = "heartbeat_monitor"
+LOGGER_NAME: Final[str] = "heartbeat_monitor"
 
 # Shared logger instance for the entire project
 logger = logging.getLogger(LOGGER_NAME)

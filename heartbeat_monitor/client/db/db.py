@@ -38,10 +38,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from logging import Logger
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 # Database file path (default to module directory)
-CLIENT_DIR = Path(__file__).resolve().parent
+CLIENT_DIR: Final[Path] = Path(__file__).resolve().parent
 db_path = str(CLIENT_DIR / "heartbeat_monitor.db")
 
 # Thread-local storage for database connections

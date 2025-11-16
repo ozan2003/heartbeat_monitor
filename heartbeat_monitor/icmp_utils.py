@@ -33,17 +33,17 @@ import socket
 import struct
 import time
 from enum import IntEnum
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from heartbeat_monitor.health_stats import HealthData
 
 # Constants for health data encoding/decoding
-HEALTH_FMT = "!B3sdffff"
-HEALTH_STRUCT = struct.Struct(HEALTH_FMT)
-HEALTH_SIZE = HEALTH_STRUCT.size
+HEALTH_FMT: Final[str] = "!B3sdffff"
+HEALTH_STRUCT: Final[struct.Struct] = struct.Struct(HEALTH_FMT)
+HEALTH_SIZE: Final[int] = HEALTH_STRUCT.size
 
-VERSION = 2  # Protocol version for payload format
-MAGIC = b"HBM"  # Magic bytes to identify our protocol in payload
+VERSION: Final[int] = 2  # Protocol version for payload format
+MAGIC: Final[bytes] = b"HBM"  # Magic bytes to identify our protocol in payload
 
 """
 ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
@@ -54,16 +54,16 @@ Other message types use the 4-byte rest-of-header interpreted differently.
 
 See RFC 792 for details.
 """
-ICMP_FMT = "!BBH4s"
-ICMP_STRUCT = struct.Struct(ICMP_FMT)
-ICMP_SIZE = ICMP_STRUCT.size
+ICMP_FMT: Final[str] = "!BBH4s"
+ICMP_STRUCT: Final[struct.Struct] = struct.Struct(ICMP_FMT)
+ICMP_SIZE: Final[int] = ICMP_STRUCT.size
 
 # TODO: We can take IHL into account if we want to be more precise
-_IPV4_MIN_HEADER_SIZE = 20  # 20 is assumed default
-_IPV4_PACKET_MAX_TOTAL_LENGTH = 2**16 - 1
+_IPV4_MIN_HEADER_SIZE: Final[int] = 20  # 20 is assumed default
+_IPV4_PACKET_MAX_TOTAL_LENGTH: Final[int] = 2**16 - 1
 
 # Constants for ICMP
-ICMP_PROTO = socket.IPPROTO_ICMP
+ICMP_PROTO: Final[int] = socket.IPPROTO_ICMP
 """
 IPv4 sizing assumptions:
 - _IPV4_MIN_HEADER_SIZE is 20 bytes when no IP options are present (IHL = 5).
@@ -76,11 +76,13 @@ IPv4 sizing assumptions:
 - ICMP_ERROR_MAX_SIZE comes from RFC 1812 and refers to the entire IP packet size;
   our validation subtracts the IP header to compare against the ICMP segment.
 """
-ICMP_MAX_SEGMENT_NO_IP_OPTIONS = (
+ICMP_MAX_SEGMENT_NO_IP_OPTIONS: Final[int] = (
     _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_MIN_HEADER_SIZE
 )
-ICMP_MAX_PAYLOAD_NO_IP_OPTIONS = ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
-ICMP_ERROR_MAX_SIZE = 576  # As stated in RFC 1812
+ICMP_MAX_PAYLOAD_NO_IP_OPTIONS: Final[int] = (
+    ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
+)
+ICMP_ERROR_MAX_SIZE: Final[int] = 576  # As stated in RFC 1812
 
 
 def ipv4_header_len_from_options_len(options_len: int) -> int:
