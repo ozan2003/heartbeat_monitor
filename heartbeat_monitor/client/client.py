@@ -107,6 +107,102 @@ class ICMPClient:
         self.seq = (self.seq + 1) & 0xFFFF  # truncate to 16 bits
         return self.seq
 
+    def _handle_timeout(
+        self,
+        host: str,
+        ip_address: str,
+        alert_manager: AlertManager | None,
+    ) -> None:
+        """
+        Persist timeout and notify alert manager.
+
+        Args:
+            host: The hostname of the server that timed out
+            ip_address: The IP address of the server that timed out
+            alert_manager: The alert manager to notify
+        """
+        insert_icmp_event(
+            ip_address=ip_address,
+            event_type="timeout",
+            details="Request timed out",
+        )
+        self.logger.debug("Inserted ICMP event for %s", host)
+        if alert_manager:
+            alert_manager.handle_timeout(host, ip_address)
+
+    def _handle_icmp_error(
+        self,
+        host: str,
+        ip_address: str,
+        error: ICMPError,
+    ) -> None:
+        """
+        Persist ICMP error details.
+
+        Args:
+            host: The hostname of the server that encountered the error
+            ip_address: The IP address of the server that encountered the error
+            error: The ICMP error that occurred
+        """
+        self.logger.error("ICMP error: %s", error)
+        icmp_type = getattr(error, "icmp_type", None)
+        icmp_code = getattr(error, "icmp_code", None)
+        insert_icmp_event(
+            ip_address=ip_address,
+            event_type="icmp_error",
+            icmp_type=icmp_type,
+            icmp_code=icmp_code,
+            details=str(error),
+        )
+        self.logger.debug("Inserted ICMP event for %s", host)
+
+    def _handle_success(
+        self,
+        host: str,
+        ip_address: str,
+        rtt: float,
+        health_data: HealthData,
+        alert_manager: AlertManager | None,
+    ) -> None:
+        """
+        Persist health data and notify alert manager.
+        """
+        rtt_ms = rtt * 1000.0
+        insert_health_measurement(
+            ip_address=ip_address,
+            rtt_ms=rtt_ms,
+            cpu_percent=health_data.cpu_percent,
+            memory_percent=health_data.memory_percent,
+            memory_available_mb=health_data.memory_available_mb,
+            disk_percent=health_data.disk_percent,
+            server_timestamp=None,
+        )
+        self.logger.debug("Inserted health measurement for %s", host)
+        if alert_manager:
+            alert_manager.handle_measurement(host, ip_address, health_data)
+
+    def _process_host(
+        self, host: str, alert_manager: AlertManager | None
+    ) -> None:
+        """Resolve, probe, and record results for a single host."""
+        try:
+            ip_address = socket.gethostbyname(host)
+        except socket.gaierror:
+            self.logger.error("%s DNS resolution failed", host)
+            return
+
+        try:
+            rtt, health_data = self.ping_once(host)
+        except TimeoutError:
+            self.logger.warning("%s request timed out", host)
+            self._handle_timeout(host, ip_address, alert_manager)
+            return
+        except ICMPError as error:
+            self._handle_icmp_error(host, ip_address, error)
+            return
+
+        self._handle_success(host, ip_address, rtt, health_data, alert_manager)
+
     def ping_once(self, host: str) -> tuple[float, HealthData]:
         """
         Send one Echo Request to host and wait for Echo Reply.
@@ -239,64 +335,8 @@ class ICMPClient:
                     break
 
                 for host in hosts:
-                    # Resolve hostname to IP address for database storage
-                    try:
-                        ip_address = socket.gethostbyname(host)
-                    except socket.gaierror:
-                        self.logger.error("%s DNS resolution failed", host)
-                        continue
-
-                    try:
-                        rtt, health_data = self.ping_once(host)
-                    except TimeoutError:
-                        self.logger.warning("%s request timed out", host)
-                        insert_icmp_event(
-                            ip_address=ip_address,
-                            event_type="timeout",
-                            details="Request timed out",
-                        )
-                        self.logger.debug("Inserted ICMP event for %s", host)
-                        if alert_manager:
-                            alert_manager.handle_timeout(host, ip_address)
-                        continue
-                    except ICMPError as e:
-                        self.logger.error("ICMP error: %s", e)
-                        # Extract ICMP type/code from the error if available
-                        icmp_type = getattr(e, "icmp_type", None)
-                        icmp_code = getattr(e, "icmp_code", None)
-                        insert_icmp_event(
-                            ip_address=ip_address,
-                            event_type="icmp_error",
-                            icmp_type=icmp_type,
-                            icmp_code=icmp_code,
-                            details=str(e),
-                        )
-                        self.logger.debug("Inserted ICMP event for %s", host)
-                        continue
-                    else:
-                        cpu = health_data.cpu_percent
-                        mem = health_data.memory_percent
-                        disk = health_data.disk_percent
-                        rtt_ms = rtt * 1000.0  # convert to milliseconds
-
-                        insert_health_measurement(
-                            ip_address=ip_address,
-                            rtt_ms=rtt_ms,
-                            cpu_percent=cpu,
-                            memory_percent=mem,
-                            memory_available_mb=health_data.memory_available_mb,
-                            disk_percent=disk,
-                            server_timestamp=None,
-                        )
-                        self.logger.debug(
-                            "Inserted health measurement for %s", host
-                        )
-                        if alert_manager:
-                            alert_manager.handle_measurement(
-                                host, ip_address, health_data
-                            )
-                    finally:
-                        time.sleep(0.01)  # tiny spacing between hosts
+                    self._process_host(host, alert_manager)
+                    time.sleep(0.01)  # tiny spacing between hosts
 
                 pings_sent += 1
                 if interval > 0:
