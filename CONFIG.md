@@ -62,6 +62,18 @@ memory_threshold = 80
 disk_threshold = 85       
 consecutive_timeouts = 2
 
+[alerts.email]
+enabled = true
+smtp_host = "smtp.example.com"
+smtp_port = 587
+username = "monitor"
+password = "changeme"
+use_tls = true
+use_ssl = false
+from_address = "heartbeat@example.com"
+recipients = ["ops@example.com", "oncall@example.com"]
+timeout_seconds = 10.0
+
 [logging]
 # One of: "DEBUG", "INFO", "WARNING", "ERROR". Default: "INFO"
 level = "INFO"
@@ -97,6 +109,19 @@ Repeat `[[servers]]` to declare multiple servers.
 - memory_threshold (integer, optional): memory usage threshold in percentage (default: 95)
 - disk_threshold (integer, optional): disk usage threshold in percentage (default: 90)
 - consecutive_timeouts (integer, optional): number of consecutive timeouts before alerting (default: 3)
+
+### [alerts.email]
+
+- enabled (boolean, optional): enable/disable email delivery (default: false)
+- smtp_host (string, required when enabled): SMTP server hostname
+- smtp_port (integer, optional): SMTP port (default: 587)
+- username (string, optional): SMTP username for authentication
+- password (string, optional): SMTP password (requires username)
+- use_tls (boolean, optional): enable STARTTLS (default: true)
+- use_ssl (boolean, optional): use implicit TLS/SSL instead of STARTTLS (default: false)
+- from_address (string, required when enabled): email address to send from
+- recipients (array of strings, required when enabled): recipient email addresses
+- timeout_seconds (float, optional): SMTP connect/send timeout in seconds (default: 10.0)
 
 ### [logging]
 

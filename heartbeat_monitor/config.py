@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import os
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -63,6 +64,91 @@ class ServerConfig(BaseModel):
     description: str | None = None
 
 
+class EmailConfig(BaseModel):
+    """Email alert delivery settings."""
+
+    enabled: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = Field(587, gt=0)
+    username: str | None = None
+    password: str | None = None
+    use_tls: bool = True
+    use_ssl: bool = False
+    from_address: str | None = None
+    recipients: list[str] = Field(default_factory=list)
+    timeout_seconds: float = Field(10.0, gt=0)
+
+    @field_validator("recipients")
+    def validate_recipients(cls, value: list[str]) -> list[str]:
+        """Ensure recipient list is not empty when enabled and entries are non-blank."""
+        cleaned = [addr.strip() for addr in value if addr.strip()]
+        if len(cleaned) != len(value):
+            msg = "Recipients must not contain blank addresses"
+            raise ValueError(msg)
+        return cleaned
+
+    @field_validator("smtp_port")
+    def validate_port(cls, value: int) -> int:
+        """Validate SMTP port."""
+        if value <= 0 or value > 65535:
+            msg = "SMTP port must be in range 1-65535"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("from_address")
+    def validate_from_address(cls, value: str | None) -> str | None:
+        """Ensure from address is non-empty when provided."""
+        if value is not None and not value.strip():
+            msg = "from_address must not be blank"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("smtp_host")
+    def validate_host(cls, value: str | None) -> str | None:
+        """Ensure SMTP host is non-empty when provided."""
+        if value is not None and not value.strip():
+            msg = "smtp_host must not be blank"
+            raise ValueError(msg)
+        return value
+
+    def model_post_init(self, __context: Any) -> None:
+        """Validate cross-field requirements when email alerts are enabled."""
+        if self.use_ssl and self.use_tls:
+            msg = "use_ssl and use_tls cannot both be true"
+            raise ValueError(msg)
+
+        if self.password and not self.username:
+            msg = (
+                "password set without username; set username or clear password"
+            )
+            raise ValueError(msg)
+
+        if not self.enabled:
+            return
+
+        missing: list[str] = []
+        if not self.smtp_host:
+            missing.append("smtp_host")
+        if not self.from_address:
+            missing.append("from_address")
+        if not self.recipients:
+            missing.append("recipients")
+
+        if missing:
+            fields = ", ".join(missing)
+            msg = f"Email alerts enabled but missing required fields: {fields}"
+            raise ValueError(msg)
+
+    def is_configured(self) -> bool:
+        """Return True when email alerts are enabled and minimally configured."""
+        return (
+            self.enabled
+            and bool(self.smtp_host)
+            and bool(self.from_address)
+            and bool(self.recipients)
+        )
+
+
 class AlertsConfig(BaseModel):
     """Alert thresholds and rules."""
 
@@ -71,6 +157,9 @@ class AlertsConfig(BaseModel):
     memory_threshold: int = Field(95, ge=0, le=100)
     disk_threshold: int = Field(90, ge=0, le=100)
     consecutive_timeouts: int = Field(3, gt=0)
+    email: EmailConfig = Field(
+        default_factory=cast(Callable[[], EmailConfig], EmailConfig)
+    )
 
     @field_validator("cpu_threshold", "memory_threshold", "disk_threshold")
     def validate_threshold(cls, v: int) -> int:
@@ -109,13 +198,19 @@ class LoggingConfig(BaseModel):
 class ClientConfig(BaseModel):
     """Top-level configuration schema."""
 
-    database: Annotated[DatabaseConfig, Field(default_factory=DatabaseConfig)]
-    monitoring: Annotated[
-        MonitoringConfig, Field(default_factory=MonitoringConfig)
-    ]
-    servers: Annotated[list[ServerConfig], Field(default_factory=list)]
-    alerts: Annotated[AlertsConfig, Field(default_factory=AlertsConfig)]
-    logging: Annotated[LoggingConfig, Field(default_factory=LoggingConfig)]
+    database: DatabaseConfig = Field(
+        default_factory=cast(Callable[[], DatabaseConfig], DatabaseConfig)
+    )
+    monitoring: MonitoringConfig = Field(
+        default_factory=cast(Callable[[], MonitoringConfig], MonitoringConfig)
+    )
+    servers: list[ServerConfig] = Field(default_factory=list)
+    alerts: AlertsConfig = Field(
+        default_factory=cast(Callable[[], AlertsConfig], AlertsConfig)
+    )
+    logging: LoggingConfig = Field(
+        default_factory=cast(Callable[[], LoggingConfig], LoggingConfig)
+    )
 
 
 def discover_config_path(explicit: str | None = None) -> Path | None:
@@ -204,7 +299,7 @@ def load_config(explicit_path: str | None = None) -> ClientConfig:
 
     path = discover_config_path(explicit_path)
     if not path:
-        return ClientConfig()  # type: ignore
+        return ClientConfig()
 
     toml_config = _load_toml(path)
     return ClientConfig.model_validate(toml_config)
@@ -214,6 +309,7 @@ __all__ = [
     "AlertsConfig",
     "ClientConfig",
     "DatabaseConfig",
+    "EmailConfig",
     "LoggingConfig",
     "MonitoringConfig",
     "ServerConfig",

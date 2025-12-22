@@ -30,6 +30,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Final
 
+from heartbeat_monitor.alerts import AlertManager
 from heartbeat_monitor.client.db import (
     cleanup_old_data,
     close_thread_connection,
@@ -214,7 +215,12 @@ class ICMPClient:
                     return rtt, hd
 
     def loop(
-        self, hosts: list[str], *, interval: float, count: int | None
+        self,
+        hosts: list[str],
+        *,
+        interval: float,
+        count: int | None,
+        alert_manager: AlertManager | None = None,
     ) -> None:
         """
         Continuously ping provided hosts with an interval.
@@ -223,6 +229,7 @@ class ICMPClient:
             hosts: List of target hostnames or IP addresses to ping.
             interval: Seconds to wait between each round of pings. If 0, pings continuously without delay.
             count: Number of ping rounds to perform. If None, runs indefinitely until interrupted.
+            alert_manager: Optional alert manager used to dispatch notifications.
         """
         pings_sent = 0
         try:
@@ -249,6 +256,8 @@ class ICMPClient:
                             details="Request timed out",
                         )
                         self.logger.debug("Inserted ICMP event for %s", host)
+                        if alert_manager:
+                            alert_manager.handle_timeout(host, ip_address)
                         continue
                     except ICMPError as e:
                         self.logger.error("ICMP error: %s", e)
@@ -282,6 +291,10 @@ class ICMPClient:
                         self.logger.debug(
                             "Inserted health measurement for %s", host
                         )
+                        if alert_manager:
+                            alert_manager.handle_measurement(
+                                host, ip_address, health_data
+                            )
                     finally:
                         time.sleep(0.01)  # tiny spacing between hosts
 
@@ -414,10 +427,13 @@ def main() -> None:
     count = None if args.count == 0 else max(0, args.count)
 
     client = ICMPClient(logger=logger, timeout=timeout)
+    alert_manager = AlertManager(config.alerts, logger)
     logger.debug("ICMP client started")
     logger.debug("Probing: %s", ", ".join(hosts))
 
-    client.loop(hosts, interval=interval, count=count)
+    client.loop(
+        hosts, interval=interval, count=count, alert_manager=alert_manager
+    )
 
 
 if __name__ == "__main__":
