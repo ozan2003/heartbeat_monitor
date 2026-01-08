@@ -40,6 +40,8 @@ from logging import Logger
 from pathlib import Path
 from typing import Any, Final
 
+from logging_utils import logger
+
 # Database file path (default to module directory)
 CLIENT_DIR: Final[Path] = Path(__file__).resolve().parent
 db_path = str(CLIENT_DIR / "heartbeat_monitor.db")
@@ -259,23 +261,28 @@ def insert_health_measurement(
     server_id = get_or_create_server(ip_address)
 
     with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO health_measurements (
-                server_id, server_timestamp, rtt_ms,
-                cpu_percent, memory_percent, memory_available_mb, disk_percent
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                server_id,
-                server_timestamp,
-                rtt_ms,
-                cpu_percent,
-                memory_percent,
-                memory_available_mb,
-                disk_percent,
-            ),
-        )
+        try:
+            conn.execute(
+                """
+                INSERT INTO health_measurements (
+                    server_id, server_timestamp, rtt_ms,
+                    cpu_percent, memory_percent, memory_available_mb, disk_percent
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    server_id,
+                    server_timestamp,
+                    rtt_ms,
+                    cpu_percent,
+                    memory_percent,
+                    memory_available_mb,
+                    disk_percent,
+                ),
+            )
+        except sqlite3.Error:
+            logger.exception(
+                "DB write failed: health_measurement ip=%s", ip_address
+            )
 
 
 def insert_icmp_event(
@@ -302,14 +309,17 @@ def insert_icmp_event(
         details = json.dumps(details)
 
     with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO icmp_events (
-                server_id, event_type, icmp_type, icmp_code, details
-            ) VALUES (?, ?, ?, ?, ?)
-        """,
-            (server_id, event_type, icmp_type, icmp_code, details),
-        )
+        try:
+            conn.execute(
+                """
+                INSERT INTO icmp_events (
+                    server_id, event_type, icmp_type, icmp_code, details
+                ) VALUES (?, ?, ?, ?, ?)
+            """,
+                (server_id, event_type, icmp_type, icmp_code, details),
+            )
+        except sqlite3.Error:
+            logger.exception("DB write failed: icmp_event ip=%s", ip_address)
 
 
 def insert_timestamp_measurement(
@@ -332,20 +342,25 @@ def insert_timestamp_measurement(
     server_id = get_or_create_server(ip_address)
 
     with get_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO timestamp_measurements (
-                server_id, originate_ts, receive_ts, transmit_ts, clock_offset_ms
-            ) VALUES (?, ?, ?, ?, ?)
-        """,
-            (
-                server_id,
-                originate_ts,
-                receive_ts,
-                transmit_ts,
-                clock_offset_ms,
-            ),
-        )
+        try:
+            conn.execute(
+                """
+                INSERT INTO timestamp_measurements (
+                    server_id, originate_ts, receive_ts, transmit_ts, clock_offset_ms
+                ) VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    server_id,
+                    originate_ts,
+                    receive_ts,
+                    transmit_ts,
+                    clock_offset_ms,
+                ),
+            )
+        except sqlite3.Error:
+            logger.exception(
+                "DB write failed: timestamp_measurement ip=%s", ip_address
+            )
 
 
 # --------------------------- Read operations ---------------------------
