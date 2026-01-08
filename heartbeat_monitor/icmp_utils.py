@@ -9,7 +9,7 @@ It contains:
 
 Binary health monitoring format:
     - Magic bytes (3 bytes): 'HBM' - identifies our protocol
-    - Version (1 byte): Protocol version (currently 1)
+    - Version (1 byte): Protocol version
     - Timestamp (8 bytes double): Unix timestamp when data was gathered
     - CPU percent (4 bytes float): CPU usage percentage
     - Memory percent (4 bytes float): Memory usage percentage
