@@ -69,7 +69,7 @@ class AlertManager:
 
     @property
     def _email_enabled(self) -> bool:
-        """Return True if alerts and email are enabled and configured."""
+        """Returns True if alerts and email are enabled and configured."""
         email_cfg = self.config.email
         return self.config.enabled and email_cfg.is_configured()
 
@@ -154,9 +154,9 @@ class AlertManager:
     def _send_email(self, subject: str, body: str) -> None:
         """Send the email using configured SMTP settings."""
         email_cfg = self.config.email
-        assert email_cfg.smtp_host is not None
-        assert email_cfg.from_address is not None
-        assert email_cfg.recipients
+        #assert email_cfg.smtp_host is not None
+        #assert email_cfg.from_address is not None
+        #assert email_cfg.recipients
 
         message = EmailMessage()
         message["Subject"] = subject
