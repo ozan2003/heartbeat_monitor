@@ -204,7 +204,7 @@ class ClientConfig(BaseModel):
     monitoring: MonitoringConfig = Field(
         default_factory=cast(Callable[[], MonitoringConfig], MonitoringConfig)
     )
-    servers: list[ServerConfig] = Field(default_factory=list)
+    servers: list[ServerConfig] = Field(default_factory=list[ServerConfig])
     alerts: AlertsConfig = Field(
         default_factory=cast(Callable[[], AlertsConfig], AlertsConfig)
     )
