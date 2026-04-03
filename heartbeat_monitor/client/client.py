@@ -75,18 +75,20 @@ class ICMPClient:
             logger: Logger instance to use for logging
             timeout: Per-request timeout in seconds
         """
-        self.logger = logger
+        self.logger: Logger = logger
         self.logger.debug("Initializing ICMP client")
 
-        self.timeout = timeout
+        self.timeout: float = timeout
         # Raw ICMP socket (requires root or CAP_NET_RAW)
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
+        self.sock: socket.socket = socket.socket(
+            socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO
+        )
         # Some platforms support setting receive timeout on socket
         self.sock.settimeout(self.timeout)
         # use current process ID as identifier
         # identifier is unsigned 16-bit int, any excess bits are shaved off
-        self.pid = os.getpid() & 0xFFFF
-        self.seq = 0
+        self.pid: int = os.getpid() & 0xFFFF
+        self.seq: int = 0
 
     def close(self) -> None:
         """Close the underlying socket and database connection."""

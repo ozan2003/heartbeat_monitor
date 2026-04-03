@@ -45,9 +45,11 @@ class ICMPServer:
             logger: Logger instance to use for logging
             bind_addr: Optional IP address to bind to (default: all interfaces)
         """
-        self.logger = logger
+        self.logger: Logger = logger
         self.logger.debug("Initializing ICMP server")
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO)
+        self.sock: socket.socket = socket.socket(
+            socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO
+        )
         # Binding on raw sockets filters received packets by dst IP on some OSes.
         if bind_addr:
             with contextlib.suppress(OSError):

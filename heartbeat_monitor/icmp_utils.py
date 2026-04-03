@@ -285,8 +285,8 @@ class ICMPError(Exception):
 
     def __init__(self, message: str, *, icmp_type: int, code: int) -> None:
         super().__init__(message)
-        self.icmp_type = icmp_type
-        self.code = code
+        self.icmp_type: int = icmp_type
+        self.code: int = code
 
 
 class DestinationUnreachableError(ICMPError):
@@ -305,7 +305,7 @@ class DestinationUnreachableError(ICMPError):
         super().__init__(
             desc, icmp_type=ICMPTypes.DESTINATION_UNREACHABLE.value, code=code
         )
-        self.next_hop_mtu = next_hop_mtu
+        self.next_hop_mtu: int | None = next_hop_mtu
 
 
 class RedirectError(ICMPError):
@@ -315,7 +315,7 @@ class RedirectError(ICMPError):
         desc = REDIRECT_DESC.get(code, f"Redirect (code {code})")
         msg = f"{desc}: use gateway {gateway}"
         super().__init__(msg, icmp_type=ICMPTypes.REDIRECT.value, code=code)
-        self.gateway = gateway
+        self.gateway: str = gateway
 
 
 class TimeExceededError(ICMPError):
@@ -339,7 +339,7 @@ class ParameterProblemError(ICMPError):
         super().__init__(
             msg, icmp_type=ICMPTypes.PARAMETER_PROBLEM.value, code=code
         )
-        self.pointer = pointer
+        self.pointer: int | None = pointer
 
 
 # -------------------------------------------------------------

@@ -4,6 +4,7 @@ import logging
 import smtplib
 from datetime import UTC, datetime
 from email.message import EmailMessage
+from logging import Logger
 from typing import Any
 
 from heartbeat_monitor.config import AlertsConfig
@@ -14,8 +15,8 @@ class AlertManager:
     """Evaluate thresholds and dispatch email alerts."""
 
     def __init__(self, config: AlertsConfig, logger: logging.Logger) -> None:
-        self.config = config
-        self.logger = logger
+        self.config: AlertsConfig = config
+        self.logger: Logger = logger
         self._timeout_counters: dict[str, int] = {}
         self._active_alerts: dict[str, set[str]] = {}
 
@@ -154,9 +155,9 @@ class AlertManager:
     def _send_email(self, subject: str, body: str) -> None:
         """Send the email using configured SMTP settings."""
         email_cfg = self.config.email
-        #assert email_cfg.smtp_host is not None
-        #assert email_cfg.from_address is not None
-        #assert email_cfg.recipients
+        # assert email_cfg.smtp_host is not None
+        # assert email_cfg.from_address is not None
+        # assert email_cfg.recipients
 
         message = EmailMessage()
         message["Subject"] = subject

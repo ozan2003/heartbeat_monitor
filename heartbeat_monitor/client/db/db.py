@@ -40,7 +40,7 @@ from logging import Logger
 from pathlib import Path
 from typing import Any, Final
 
-from logging_utils import logger
+from heartbeat_monitor.logging_utils import logger
 
 # Database file path (default to module directory)
 CLIENT_DIR: Final[Path] = Path(__file__).resolve().parent

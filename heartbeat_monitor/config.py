@@ -18,7 +18,7 @@ import os
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Final, Literal, cast
+from typing import Any, Final, Literal, cast, override
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -111,6 +111,7 @@ class EmailConfig(BaseModel):
             raise ValueError(msg)
         return value
 
+    @override
     def model_post_init(self, __context: Any) -> None:
         """Validate cross-field requirements when email alerts are enabled."""
         if self.use_ssl and self.use_tls:
