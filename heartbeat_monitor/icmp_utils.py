@@ -1,5 +1,4 @@
-"""
-Shared utilities for ICMP packet manipulation.
+"""Shared utilities for ICMP packet manipulation.
 
 It contains:
     - Functions to build ICMP packets (header + payload)
@@ -29,6 +28,7 @@ Format string: '!B3sdffff'
 
 from __future__ import annotations
 
+import math
 import socket
 import struct
 import time
@@ -79,9 +79,7 @@ IPv4 sizing assumptions:
 ICMP_MAX_SEGMENT_NO_IP_OPTIONS: Final[int] = (
     _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_MIN_HEADER_SIZE
 )
-ICMP_MAX_PAYLOAD_NO_IP_OPTIONS: Final[int] = (
-    ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
-)
+ICMP_MAX_PAYLOAD_NO_IP_OPTIONS: Final[int] = ICMP_MAX_SEGMENT_NO_IP_OPTIONS - ICMP_SIZE
 ICMP_ERROR_MAX_SIZE: Final[int] = 576  # As stated in RFC 1812
 
 
@@ -116,9 +114,7 @@ def icmp_max_payload_for_ip_header(ip_header_bytes: int) -> int:
 
 
 class ICMPTypes(IntEnum):
-    """
-    Types for ICMP headers.
-    """
+    """Types for ICMP headers."""
 
     ECHO_REPLY = 0
     DESTINATION_UNREACHABLE = 3
@@ -184,8 +180,7 @@ class ICMPHeader(NamedTuple):
     rest: bytes  # 4-byte type-specific data
 
     def is_echo(self) -> bool:
-        """
-        Check if the ICMP header is for an Echo Request or Echo Reply.
+        """Check if the ICMP header is for an Echo Request or Echo Reply.
 
         Returns:
             bool: True if Echo Request or Reply; otherwise False.
@@ -196,8 +191,7 @@ class ICMPHeader(NamedTuple):
         )
 
     def try_extract_echo_identifiers(self) -> tuple[int, int] | None:
-        """
-        Try to extract the identifier and sequence number from an ICMP Echo header.
+        """Try to extract the identifier and sequence number from an ICMP Echo header.
 
         Returns:
             tuple[int, int] | None: (_id, sequence) if Echo; otherwise None.
@@ -208,8 +202,7 @@ class ICMPHeader(NamedTuple):
         return _id, seq
 
     def decode_icmp_rest(self) -> dict[str, Any]:
-        """
-        Decode the 4-byte rest-of-header into a dict of type-specific fields.
+        """Decode the 4-byte rest-of-header into a dict of type-specific fields.
 
         Supported types:
         - Echo (request/reply): `{"id": int, "sequence": int}`
@@ -225,7 +218,7 @@ class ICMPHeader(NamedTuple):
         c = self.code
         rest = self.rest
 
-        fields = {}
+        fields: dict[str, Any] = {}
 
         if (
             t in (ICMPTypes.ECHO_REQUEST.value, ICMPTypes.ECHO_REPLY.value)
@@ -323,22 +316,16 @@ class TimeExceededError(ICMPError):
 
     def __init__(self, code: int) -> None:
         desc = TIME_EXCEEDED_DESC.get(code, f"Time exceeded (code {code})")
-        super().__init__(
-            desc, icmp_type=ICMPTypes.TIME_EXCEEDED.value, code=code
-        )
+        super().__init__(desc, icmp_type=ICMPTypes.TIME_EXCEEDED.value, code=code)
 
 
 class ParameterProblemError(ICMPError):
     """ICMP Parameter Problem error indicating an issue in the IP header."""
 
     def __init__(self, code: int, *, pointer: int | None = None) -> None:
-        base = PARAMETER_PROBLEM_DESC.get(
-            code, f"Parameter problem (code {code})"
-        )
+        base = PARAMETER_PROBLEM_DESC.get(code, f"Parameter problem (code {code})")
         msg = f"{base}" if pointer is None else f"{base} at byte {pointer}"
-        super().__init__(
-            msg, icmp_type=ICMPTypes.PARAMETER_PROBLEM.value, code=code
-        )
+        super().__init__(msg, icmp_type=ICMPTypes.PARAMETER_PROBLEM.value, code=code)
         self.pointer: int | None = pointer
 
 
@@ -346,9 +333,7 @@ class ParameterProblemError(ICMPError):
 
 
 def calculate_checksum(data: bytes) -> int:
-    """
-    Calculate the ICMP checksum for the given data using one's-complement
-    16-bit summation with proper carry folding.
+    """Calculate the ICMP checksum for the given data using one's-complement 16-bit summation with proper carry folding.
 
     Args:
         data (bytes): The data over which to calculate the checksum.
@@ -381,8 +366,7 @@ def create_icmp_packet(
     payload: bytes = b"",
     ip_header_bytes: int = _IPV4_MIN_HEADER_SIZE,
 ) -> bytes:
-    """
-    Create an ICMP packet with the given parameters.
+    """Create an ICMP packet with the given parameters.
 
     Args:
         icmp_type (int): ICMP type (e.g., 8 for echo request, 0 for echo reply).
@@ -399,8 +383,7 @@ def create_icmp_packet(
     """
 
     def is_error(icmp_type: int) -> bool:
-        """
-        Check if the ICMP header is for an error.
+        """Check if the ICMP header is for an error.
 
         Args:
             icmp_type (int): The ICMP type to check.
@@ -454,8 +437,7 @@ def create_icmp_packet(
 
 
 def _echo_rest(_id: int, seq_num: int) -> bytes:
-    """
-    Helper to build the 4-byte rest-of-header for ICMP Echo messages.
+    """Helper to build the 4-byte rest-of-header for ICMP Echo messages.
 
     Args:
         _id (int): Identifier for the Echo message.
@@ -475,8 +457,7 @@ def create_echo_request(
     payload: bytes = b"",
     ip_header_bytes: int | None = None,
 ) -> bytes:
-    """
-    Create an ICMP Echo Request packet.
+    """Create an ICMP Echo Request packet.
 
     Args:
         _id (int): Identifier to match requests and replies.
@@ -488,9 +469,7 @@ def create_echo_request(
         bytes: The complete ICMP Echo Request packet (header + payload).
     """
     effective_ihl = (
-        ip_header_bytes
-        if ip_header_bytes is not None
-        else _IPV4_MIN_HEADER_SIZE
+        ip_header_bytes if ip_header_bytes is not None else _IPV4_MIN_HEADER_SIZE
     )
     return create_icmp_packet(
         ICMPTypes.ECHO_REQUEST.value,
@@ -508,8 +487,7 @@ def create_echo_reply(
     payload: bytes,
     ip_header_bytes: int | None = None,
 ) -> bytes:
-    """
-    Create an ICMP Echo Reply packet.
+    """Create an ICMP Echo Reply packet.
 
     Args:
         _id (int): Identifier to match requests and replies.
@@ -521,9 +499,7 @@ def create_echo_reply(
         bytes: The complete ICMP Echo Reply packet (header + payload).
     """
     effective_ihl = (
-        ip_header_bytes
-        if ip_header_bytes is not None
-        else _IPV4_MIN_HEADER_SIZE
+        ip_header_bytes if ip_header_bytes is not None else _IPV4_MIN_HEADER_SIZE
     )
     return create_icmp_packet(
         ICMPTypes.ECHO_REPLY.value,
@@ -535,8 +511,7 @@ def create_echo_reply(
 
 
 def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
-    """
-    Parse an ICMP packet into header and payload.
+    """Parse an ICMP packet into header and payload.
 
     Args:
         packet (bytes): The raw ICMP packet data.
@@ -561,9 +536,7 @@ def parse_icmp_packet(packet: bytes) -> tuple[ICMPHeader, bytes]:
 
 
 def verify_checksum(packet: bytes) -> bool:
-    """
-    Verify the checksum of an ICMP packet by zeroing the checksum field
-    and recomputing over the whole ICMP message.
+    """Verify the checksum of an ICMP packet by zeroing the checksum field and recomputing over the whole ICMP message.
 
     Args:
         packet (bytes): The raw ICMP packet data.
@@ -590,8 +563,7 @@ def verify_checksum(packet: bytes) -> bool:
 def encode_health_data(
     health_dict: dict[str, Any], *, timestamp: float | None = None
 ) -> bytes:
-    """
-    Encode health metrics into binary payload format using struct.pack.
+    """Encode health metrics into binary payload format using struct.pack.
 
     Args:
         health_dict: Dictionary containing health metrics from `get_basic_health()`
@@ -600,7 +572,6 @@ def encode_health_data(
     Returns:
         bytes: Binary encoded health data
     """
-
     if timestamp is None:
         timestamp = time.time()
 
@@ -621,8 +592,7 @@ def encode_health_data(
 
 
 def decode_health_data(payload: bytes) -> HealthData:
-    """
-    Decode health metrics from binary payload.
+    """Decode health metrics from binary payload.
 
     Args:
         payload: Binary payload from ICMP packet
@@ -651,6 +621,21 @@ def decode_health_data(payload: bytes) -> HealthData:
         msg = f"Invalid version: got {version!r}, expected {VERSION!r}"
         raise ValueError(msg)
 
+    # Reject non-finite payloads and out-of-range percentages (per spec).
+    floats = (timestamp, cpu, mem_percent, mem_avail_mb, disk)
+    if not all(math.isfinite(value) for value in floats):
+        msg = "Invalid payload: contains NaN or infinite values"
+        raise ValueError(msg)
+    if not 0.0 <= cpu <= 100.0:
+        msg = f"CPU percent out of range [0, 100]: {cpu!r}"
+        raise ValueError(msg)
+    if not 0.0 <= mem_percent <= 100.0:
+        msg = f"Memory percent out of range [0, 100]: {mem_percent!r}"
+        raise ValueError(msg)
+    if not 0.0 <= disk <= 100.0:
+        msg = f"Disk percent out of range [0, 100]: {disk!r}"
+        raise ValueError(msg)
+
     return HealthData(
         timestamp=timestamp,
         cpu_percent=cpu,
@@ -661,8 +646,7 @@ def decode_health_data(payload: bytes) -> HealthData:
 
 
 def build_rest_for_redirect(gateway_ip: str) -> bytes:
-    """
-    Build the 4-byte rest-of-header for an ICMP Redirect message for the given gateway.
+    """Build the 4-byte rest-of-header for an ICMP Redirect message for the given gateway.
 
     Args:
         gateway_ip: The IPv4 address of the gateway to redirect to.
@@ -674,8 +658,7 @@ def build_rest_for_redirect(gateway_ip: str) -> bytes:
 
 
 def strip_ipv4_header_if_present(data: bytes) -> bytes:
-    """
-    Return the ICMP segment, stripping an IPv4 header if one is present.
+    """Return the ICMP segment, stripping an IPv4 header if one is present.
 
     Why:
         On many Linux kernels, reading from a raw ICMP socket (AF_INET, SOCK_RAW,
@@ -715,8 +698,7 @@ def strip_ipv4_header_if_present(data: bytes) -> bytes:
 
 
 def extract_quoted_echo_identifiers(payload: bytes) -> tuple[int, int] | None:
-    """
-    From an ICMP error payload, extract the original Echo (id, seq) if present.
+    """From an ICMP error payload, extract the original Echo (id, seq) if present.
 
     ICMP errors embed the original IP header + at least 8 bytes of the
     original payload (RFC 792). For our echo probes, that includes the
@@ -737,10 +719,7 @@ def extract_quoted_echo_identifiers(payload: bytes) -> tuple[int, int] | None:
         # in bytes, multiply by 32 for bits
         ihl_bytes = (payload[0] & 0x0F) * 4
 
-        if (
-            ihl_bytes >= _IPV4_MIN_HEADER_SIZE
-            and len(payload) >= ihl_bytes + 8
-        ):
+        if ihl_bytes >= _IPV4_MIN_HEADER_SIZE and len(payload) >= ihl_bytes + 8:
             inner = payload[ihl_bytes : ihl_bytes + 8]
 
             try:

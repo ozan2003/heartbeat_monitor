@@ -1,5 +1,4 @@
-"""
-Top-level package for heartbeat_monitor.
+"""Top-level package for heartbeat_monitor.
 
 Re-exports commonly used interfaces for convenient imports.
 """

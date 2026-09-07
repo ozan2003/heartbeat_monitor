@@ -3,7 +3,7 @@
 <!-- badges -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-%2307405e.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/index.html)
 [![Stars](https://img.shields.io/github/stars/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor/commits/master)
@@ -40,7 +40,7 @@ The app saves a small database file so you can look back at past checks.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - `psutil` library
 - SQLite
 

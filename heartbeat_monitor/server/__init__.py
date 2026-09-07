@@ -1,6 +1,5 @@
 # ruff: noqa: PLC0415
-"""
-Server package for heartbeat_monitor.
+"""Server package for heartbeat_monitor.
 
 Provides lazy exports to avoid importing submodules with side effects
 at package import time.

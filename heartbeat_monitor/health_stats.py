@@ -1,5 +1,4 @@
-"""
-Gather system health metrics from the OS.
+"""Gather system health metrics from the OS.
 
 It does:
     - Get system stats.
@@ -31,8 +30,7 @@ class HealthData(NamedTuple):
 
 
 def get_cpu_percent() -> float:
-    """
-    Get current CPU usage percentage without blocking.
+    """Get current CPU usage percentage without blocking.
 
     Returns:
         CPU usage percentage (0.0 to 100.0)
@@ -43,8 +41,7 @@ def get_cpu_percent() -> float:
 
 
 def get_memory_info() -> dict[str, int | float]:
-    """
-    Get memory usage information.
+    """Get memory usage information.
 
     Returns:
         Dict containing total, available, used memory in bytes and usage percent.
@@ -59,8 +56,7 @@ def get_memory_info() -> dict[str, int | float]:
 
 
 def get_disk_info() -> dict[str, int | float]:
-    """
-    Get disk usage information for root partition.
+    """Get disk usage information for root partition.
 
     Returns:
         Dict containing total, used, free space in bytes and usage percent.
@@ -70,13 +66,12 @@ def get_disk_info() -> dict[str, int | float]:
         "total": disk.total,
         "used": disk.used,
         "free": disk.free,
-        "percent": (disk.used / disk.total) * 100,
+        "percent": disk.percent,
     }
 
 
 def get_basic_health() -> dict[str, Any]:
-    """
-    Get basic system health metrics.
+    """Get basic system health metrics.
 
     Returns:
         Dict containing CPU, memory, and disk usage information.

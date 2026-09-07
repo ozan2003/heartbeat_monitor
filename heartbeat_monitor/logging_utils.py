@@ -1,5 +1,4 @@
-"""
-Logging utilities for both client and server.
+"""Logging utilities for both client and server.
 
 It sets up a shared logger for the entire project.
 

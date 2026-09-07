@@ -1,5 +1,4 @@
-"""
-Client database services.
+"""Client database services.
 
 Every client has its own database file, named `heartbeat_monitor.db` in the current directory.
 

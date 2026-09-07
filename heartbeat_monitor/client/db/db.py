@@ -1,5 +1,4 @@
-"""
-Client database services.
+"""Client database services.
 
 This module implements the SQLite persistence layer used by the client to store
 monitoring results:
@@ -51,8 +50,7 @@ _thread_local = threading.local()
 
 
 def get_thread_connection() -> sqlite3.Connection:
-    """
-    Get a database connection for the current thread.
+    """Get a database connection for the current thread.
 
     Each thread gets its own connection stored in thread-local storage.
     This is thread-safe and efficient for concurrent writes.
@@ -82,8 +80,7 @@ def get_thread_connection() -> sqlite3.Connection:
 
 @contextmanager
 def get_db_connection() -> Iterator[sqlite3.Connection]:
-    """
-    Context manager for database operations.
+    """Context manager for database operations.
 
     Usage:
     >>> with get_db_connection() as conn:
@@ -97,8 +94,7 @@ def get_db_connection() -> Iterator[sqlite3.Connection]:
 
 
 def init_database(logger: Logger) -> None:
-    """
-    Initialize database and create tables from schema file.
+    """Initialize database and create tables from schema file.
 
     This should be called once when the application starts.
     Loads schema from db_schema.sql and enables WAL mode.
@@ -154,8 +150,7 @@ def init_database(logger: Logger) -> None:
 
 
 def verify_database() -> dict[str, Any]:
-    """
-    Verify database setup and return info.
+    """Verify database setup and return info.
 
     Returns:
         dict: Database information (mode, tables, indexes)
@@ -206,8 +201,7 @@ def verify_database() -> dict[str, Any]:
 
 # --------------------------- Write operations ---------------------------
 def get_or_create_server(ip_address: str, hostname: str | None = None) -> int:
-    """
-    Get server ID by IP address, create if doesn't exist.
+    """Get server ID by IP address, create if doesn't exist.
 
     Args:
         ip_address: Server IP address
@@ -246,8 +240,7 @@ def insert_health_measurement(
     disk_percent: float,
     server_timestamp: float | None = None,
 ) -> None:
-    """
-    Insert a health measurement into the database.
+    """Insert a health measurement into the database.
 
     Args:
         ip_address: Server IP address
@@ -280,9 +273,7 @@ def insert_health_measurement(
                 ),
             )
         except sqlite3.Error:
-            logger.exception(
-                "DB write failed: health_measurement ip=%s", ip_address
-            )
+            logger.exception("DB write failed: health_measurement ip=%s", ip_address)
 
 
 def insert_icmp_event(
@@ -292,8 +283,7 @@ def insert_icmp_event(
     icmp_code: int | None = None,
     details: dict[str, Any] | str | None = None,
 ) -> None:
-    """
-    Insert an ICMP event (error, timeout, etc.) into the database.
+    """Insert an ICMP event (error, timeout, etc.) into the database.
 
     Args:
         ip_address: Server IP address
@@ -329,8 +319,7 @@ def insert_timestamp_measurement(
     transmit_ts: int,
     clock_offset_ms: float,
 ) -> None:
-    """
-    Insert timestamp measurement for clock skew tracking.
+    """Insert timestamp measurement for clock skew tracking.
 
     Args:
         ip_address: Server IP address
@@ -358,17 +347,12 @@ def insert_timestamp_measurement(
                 ),
             )
         except sqlite3.Error:
-            logger.exception(
-                "DB write failed: timestamp_measurement ip=%s", ip_address
-            )
+            logger.exception("DB write failed: timestamp_measurement ip=%s", ip_address)
 
 
 # --------------------------- Read operations ---------------------------
-def get_recent_measurements(
-    ip_address: str, limit: int = 100
-) -> list[dict[str, Any]]:
-    """
-    Get recent health measurements for a server.
+def get_recent_measurements(ip_address: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Get recent health measurements for a server.
 
     Args:
         ip_address: Server IP address
@@ -401,8 +385,7 @@ def get_recent_measurements(
 
 
 def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
-    """
-    Get statistics for a server over the last N hours.
+    """Get statistics for a server over the last N hours.
 
     Args:
         ip_address: Server IP address
@@ -484,8 +467,7 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
 
 
 def get_all_servers() -> list[dict[str, Any]]:
-    """
-    Get list of all monitored servers.
+    """Get list of all monitored servers.
 
     Returns:
         list[dict]: Server information
@@ -507,8 +489,7 @@ def get_all_servers() -> list[dict[str, Any]]:
 
 # --------------------------- Maintenance operations ---------------------------
 def cleanup_old_data(days: int) -> dict[str, int]:
-    """
-    Delete measurements and events older than N days.
+    """Delete measurements and events older than N days.
 
     Args:
         days: Keep data newer than this many days
@@ -568,8 +549,7 @@ def close_thread_connection() -> None:
 
 
 def set_db_path(path: str) -> None:
-    """
-    Override the SQLite database file path.
+    """Override the SQLite database file path.
 
     Call this before any database access/initialization in the process.
     It closes any existing thread-local connection and updates the global path.

@@ -44,7 +44,7 @@ Notes:
 
 Receivers must perform the following checks before trusting the data:
 
-- Verify payload length is exactly 28 bytes.
+- Verify payload length is at least 28 bytes.
 - Unpack using `!B3sdffff` and check:
   - `magic == b"HBM"`
   - `version == 2` (reject or handle via compatibility policy if different)
@@ -65,11 +65,16 @@ Receivers must perform the following checks before trusting the data:
 ## Reference Implementation (Encode/Decode)
 
 ```python
-import struct, time
+import math
+import struct
+import time
+
+from heartbeat_monitor.health_stats import HealthData
 
 HEALTH_FMT = "!B3sdffff"
 MAGIC = b"HBM"
-VERSION = 1
+VERSION = 2
+
 
 def encode_health_data(health: dict, timestamp: float | None = None) -> bytes:
     if timestamp is None:
@@ -85,7 +90,8 @@ def encode_health_data(health: dict, timestamp: float | None = None) -> bytes:
         float(health["disk"]["percent"]),
     )
 
-def decode_health_data(payload: bytes):
+
+def decode_health_data(payload: bytes) -> HealthData:
     if len(payload) < struct.calcsize(HEALTH_FMT):
         raise ValueError("Invalid payload size")
     version, magic, ts, cpu, mem_pct, mem_avail_mb, disk = struct.unpack(
@@ -94,14 +100,20 @@ def decode_health_data(payload: bytes):
     if magic != MAGIC:
         raise ValueError(f"Invalid magic: {magic!r}")
     if version != VERSION:
-        raise ValueError(f"Invalid version: {version}")
-    return {
-        "timestamp": ts,
-        "cpu_percent": cpu,
-        "memory_percent": mem_pct,
-        "memory_available_mb": mem_avail_mb,
-        "disk_percent": disk,
-    }
+        raise ValueError(f"Invalid version: {version!r}")
+    floats = (ts, cpu, mem_pct, mem_avail_mb, disk)
+    if not all(math.isfinite(value) for value in floats):
+        raise ValueError("Invalid payload: NaN or infinite value")
+    for label, percent in (("cpu", cpu), ("memory", mem_pct), ("disk", disk)):
+        if not 0.0 <= percent <= 100.0:
+            raise ValueError(f"{label} percent out of range [0, 100]: {percent!r}")
+    return HealthData(
+        timestamp=ts,
+        cpu_percent=cpu,
+        memory_percent=mem_pct,
+        memory_available_mb=mem_avail_mb,
+        disk_percent=disk,
+    )
 ```
 
 ### Example Usage with ICMP Echo
@@ -112,10 +124,12 @@ The payload can be carried within an ICMP Echo Request/Reply.
 from heartbeat_monitor.icmp_utils import create_echo_request, ICMPTypes
 
 _id, seq = 0x1234, 1
-payload = encode_health_data({
-    "cpu_percent": 12.5,
-    "memory": {"percent": 47.0, "available": 8_589_934_592},
-    "disk": {"percent": 73.0},
-})
+payload = encode_health_data(
+    {
+        "cpu_percent": 12.5,
+        "memory": {"percent": 47.0, "available": 8_589_934_592},
+        "disk": {"percent": 73.0},
+    }
+)
 packet = create_echo_request(_id, seq, payload=payload)
 ```

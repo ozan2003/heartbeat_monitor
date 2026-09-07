@@ -1,5 +1,4 @@
-"""
-An ICMP server that listens and responds with health data.
+"""An ICMP server that listens and responds with health data.
 
 It opens a ICMP socket, listens in an infinite loop for
 incoming ICMP Echo Request packets.
@@ -18,8 +17,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import socket
-from logging import Logger, getLevelName
-from typing import Any
+from logging import getLevelName
+from typing import TYPE_CHECKING, Any
 
 from heartbeat_monitor.health_stats import get_basic_health
 from heartbeat_monitor.icmp_utils import (
@@ -33,13 +32,15 @@ from heartbeat_monitor.icmp_utils import (
 )
 from heartbeat_monitor.logging_utils import configure_logging
 
+if TYPE_CHECKING:
+    from logging import Logger
+
 
 class ICMPServer:
     """Simple ICMP echo server that replies with encoded health metrics."""
 
     def __init__(self, logger: Logger, bind_addr: str | None = None) -> None:
-        """
-        Initialize ICMP server socket.
+        """Initialize ICMP server socket.
 
         Args:
             logger: Logger instance to use for logging
@@ -72,7 +73,7 @@ class ICMPServer:
                     raise
                 except OSError:
                     # Socket error; continue listening
-                    self.logger.error("Socket error", exc_info=True)
+                    self.logger.exception("Socket error")
                     continue
 
                 src_ip = src[0]
@@ -81,18 +82,15 @@ class ICMPServer:
                     self.logger.debug("Frame too short from %s", src_ip)
                     continue
                 if not verify_checksum(frame):
-                    self.logger.debug(
-                        "Checksum verification failed from %s", src_ip
-                    )
+                    self.logger.debug("Checksum verification failed from %s", src_ip)
                     continue
 
                 try:
                     header, _payload = parse_icmp_packet(frame)
                 except (ValueError, OSError):
-                    self.logger.error(
+                    self.logger.exception(
                         "Malformed packet received from %s",
                         src_ip,
-                        exc_info=True,
                     )
                     continue  # Malformed packet, ignore
 
@@ -112,15 +110,11 @@ class ICMPServer:
                 # Collect metrics and encode into payload
                 metrics: dict[str, Any] = get_basic_health()
                 payload = encode_health_data(metrics)
-                self.logger.debug(
-                    "Health data encoded for %s:%s", req_id, req_seq
-                )
+                self.logger.debug("Health data encoded for %s:%s", req_id, req_seq)
 
                 # Build echo reply mirroring id/sequence
                 reply = create_echo_reply(req_id, req_seq, payload=payload)
-                self.logger.debug(
-                    "Echo reply built for %s:%s", req_id, req_seq
-                )
+                self.logger.debug("Echo reply built for %s:%s", req_id, req_seq)
 
                 # Send back to the source of the request
                 # Any OSError here (e.g. network unreachable) is ignored
@@ -133,8 +127,7 @@ class ICMPServer:
 
 
 def parse_args() -> argparse.Namespace:
-    """
-    Parse CLI arguments for the ICMP server.
+    """Parse CLI arguments for the ICMP server.
 
     Returns:
         argparse.Namespace: Parsed arguments
@@ -145,9 +138,7 @@ def parse_args() -> argparse.Namespace:
         epilog="This program requires root privileges to run.",
     )
 
-    parser.add_argument(
-        "--bind", default=None, help="Bind to specific IP (optional)"
-    )
+    parser.add_argument("--bind", default=None, help="Bind to specific IP (optional)")
 
     parser.add_argument(
         "-log",

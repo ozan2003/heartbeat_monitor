@@ -1,6 +1,5 @@
 # ruff: noqa: PLC0415
-"""
-Client package for heartbeat_monitor.
+"""Client package for heartbeat_monitor.
 
 Provides lazy exports to avoid importing submodules with side effects
 at package import time.
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-__all__: list[str] = ["ICMPClient", "db"]  # pyright: ignore[reportUnsupportedDunderAll]
+__all__: list[str] = ["ICMPClient", "db"]
 
 # Make names visible to type checkers without importing at runtime
 if TYPE_CHECKING:
