@@ -49,12 +49,12 @@ def configure_logging(
     logging.basicConfig(
         format=fmt,
         datefmt=datefmt,
-        stream=sys.stdout if not file else None,
+        stream=sys.stdout if file is None else None,
         force=True,
     )
     logger.setLevel(level.upper())
 
-    if file:
+    if file is not None:
         # Add a rotating file handler so logs are persisted and rotated by size.
         handler = RotatingFileHandler(
             filename=str(Path(file).expanduser()),

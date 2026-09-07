@@ -33,9 +33,12 @@ import socket
 import struct
 import time
 from enum import IntEnum
-from typing import Any, Final, NamedTuple
+from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
 from heartbeat_monitor.health_stats import HealthData
+
+if TYPE_CHECKING:
+    from heartbeat_monitor.health_stats import HealthSnapshot
 
 # Constants for health data encoding/decoding
 HEALTH_FMT: Final[str] = "!B3sdffff"
@@ -293,7 +296,7 @@ class DestinationUnreachableError(ICMPError):
         desc = DESTINATION_UNREACHABLE_DESC.get(
             code, f"Destination unreachable (code {code})"
         )
-        if code == 4 and next_hop_mtu:
+        if code == 4 and next_hop_mtu is not None:
             desc = f"{desc} (next-hop MTU {next_hop_mtu})"
         super().__init__(
             desc, icmp_type=ICMPTypes.DESTINATION_UNREACHABLE.value, code=code
@@ -561,7 +564,7 @@ def verify_checksum(packet: bytes) -> bool:
 
 
 def encode_health_data(
-    health_dict: dict[str, Any], *, timestamp: float | None = None
+    health_dict: HealthSnapshot, *, timestamp: float | None = None
 ) -> bytes:
     """Encode health metrics into binary payload format using struct.pack.
 

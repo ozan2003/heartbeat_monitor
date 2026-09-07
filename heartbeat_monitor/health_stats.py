@@ -6,7 +6,7 @@ It does:
     - Returns current health metrics
 """
 
-from typing import Any, NamedTuple
+from typing import NamedTuple, TypedDict
 
 import psutil
 
@@ -29,6 +29,32 @@ class HealthData(NamedTuple):
     disk_percent: float
 
 
+class MemoryInfo(TypedDict):
+    """Memory usage reported by `get_memory_info`."""
+
+    total: int
+    available: int
+    percent: float
+    used: int
+
+
+class DiskInfo(TypedDict):
+    """Disk usage reported by `get_disk_info`."""
+
+    total: int
+    used: int
+    free: int
+    percent: float
+
+
+class HealthSnapshot(TypedDict):
+    """Aggregated health metrics produced by `get_basic_health`."""
+
+    cpu_percent: float
+    memory: MemoryInfo
+    disk: DiskInfo
+
+
 def get_cpu_percent() -> float:
     """Get current CPU usage percentage without blocking.
 
@@ -37,10 +63,10 @@ def get_cpu_percent() -> float:
     """
     # interval=0.0 returns the current value immediately (no 1s sleep)
     # On the very first call it may return 0.0 which is acceptable for a heartbeat.
-    return float(psutil.cpu_percent(interval=0.0))
+    return psutil.cpu_percent(interval=0.0)
 
 
-def get_memory_info() -> dict[str, int | float]:
+def get_memory_info() -> MemoryInfo:
     """Get memory usage information.
 
     Returns:
@@ -55,7 +81,7 @@ def get_memory_info() -> dict[str, int | float]:
     }
 
 
-def get_disk_info() -> dict[str, int | float]:
+def get_disk_info() -> DiskInfo:
     """Get disk usage information for root partition.
 
     Returns:
@@ -70,7 +96,7 @@ def get_disk_info() -> dict[str, int | float]:
     }
 
 
-def get_basic_health() -> dict[str, Any]:
+def get_basic_health() -> HealthSnapshot:
     """Get basic system health metrics.
 
     Returns:

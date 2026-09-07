@@ -18,7 +18,7 @@ import argparse
 import contextlib
 import socket
 from logging import getLevelName
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from heartbeat_monitor.health_stats import get_basic_health
 from heartbeat_monitor.icmp_utils import (
@@ -52,7 +52,7 @@ class ICMPServer:
             socket.AF_INET, socket.SOCK_RAW, ICMP_PROTO
         )
         # Binding on raw sockets filters received packets by dst IP on some OSes.
-        if bind_addr:
+        if bind_addr is not None:
             with contextlib.suppress(OSError):
                 self.sock.bind((bind_addr, 0))
                 self.logger.debug("Server socket bound to %s", bind_addr)
@@ -76,7 +76,7 @@ class ICMPServer:
                     self.logger.exception("Socket error")
                     continue
 
-                src_ip = src[0]
+                src_ip: str = src[0]
                 frame = strip_ipv4_header_if_present(data)
                 if len(frame) < 8:
                     self.logger.debug("Frame too short from %s", src_ip)
@@ -108,7 +108,7 @@ class ICMPServer:
                 req_id, req_seq = ids
 
                 # Collect metrics and encode into payload
-                metrics: dict[str, Any] = get_basic_health()
+                metrics = get_basic_health()
                 payload = encode_health_data(metrics)
                 self.logger.debug("Health data encoded for %s:%s", req_id, req_seq)
 

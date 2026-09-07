@@ -237,7 +237,7 @@ class ICMPClient:
 
             # Wait for socket to become readable
             ready = select.select([self.sock], [], [], remaining)[0]
-            if not ready:
+            if len(ready) == 0:
                 # select() timed out (shouldn't happen if remaining > 0, but just in case)
                 msg = "Request timed out"
                 raise TimeoutError(msg)
@@ -248,6 +248,8 @@ class ICMPClient:
             except OSError:
                 self.logger.exception("Socket error")
                 continue
+
+            src_ip: str = src[0]
 
             # Strip IP header if present
             data = strip_ipv4_header_if_present(data)
@@ -274,13 +276,13 @@ class ICMPClient:
 
             # For Echo replies, ensure they come from the destination host
             # and check if it's our Echo Reply
-            if src[0] == addr[0] and header.type == ICMPTypes.ECHO_REPLY.value:
+            if src_ip == addr[0] and header.type == ICMPTypes.ECHO_REPLY.value:
                 idents = header.try_extract_echo_identifiers()
 
                 if idents is not None and idents[0] == self.pid and idents[1] == seq:
                     # Valid reply
                     self.logger.debug(
-                        "Valid echo reply received from %s:%s", src[0], seq
+                        "Valid echo reply received from %s:%s", src_ip, seq
                     )
 
                     rtt = time.monotonic() - start
@@ -397,7 +399,11 @@ def main() -> None:
 
     # Load configuration (file or discovery) and configure logging
     config = load_config(explicit_path=args.config)
-    config.database.path = config.database.path or DEFAULT_DATABASE_PATH
+    config.database.path = (
+        config.database.path
+        if config.database.path is not None
+        else DEFAULT_DATABASE_PATH
+    )
 
     # Determine logging level precedence: CLI overrides config only if set
     level = config.logging.level if args.loglevel is None else args.loglevel
@@ -421,8 +427,15 @@ def main() -> None:
     # Determine hosts: CLI overrides config if explicitly provided
     default_hosts = ["127.0.0.1"]
     cli_hosts = list(args.hosts)
-    config_hosts = [server.hostname or server.ip for server in config.servers]
-    hosts = cli_hosts if cli_hosts != default_hosts else (config_hosts or cli_hosts)
+    config_hosts = [
+        server.hostname if server.hostname is not None else server.ip
+        for server in config.servers
+    ]
+    hosts = (
+        cli_hosts
+        if cli_hosts != default_hosts
+        else (config_hosts if len(config_hosts) > 0 else cli_hosts)
+    )
 
     # Determine monitoring parameters with precedence (CLI > config > default)
     interval = config.monitoring.interval if args.interval is None else args.interval

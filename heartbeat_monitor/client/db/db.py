@@ -33,7 +33,7 @@ Example usage:
 import json
 import sqlite3
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from logging import Logger
 from pathlib import Path
@@ -79,7 +79,7 @@ def get_thread_connection() -> sqlite3.Connection:
 
 
 @contextmanager
-def get_db_connection() -> Iterator[sqlite3.Connection]:
+def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
     """Context manager for database operations.
 
     Usage:
@@ -157,10 +157,10 @@ def verify_database() -> dict[str, Any]:
     """
     with get_db_connection() as conn:
         # Check journal mode
-        journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        journal_mode: str = conn.execute("PRAGMA journal_mode").fetchone()[0]
 
         # Get table list
-        tables = [
+        tables: list[str] = [
             row[0]
             for row in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -168,7 +168,7 @@ def verify_database() -> dict[str, Any]:
         ]
 
         # Get index list
-        indexes = [
+        indexes: list[str] = [
             row[0]
             for row in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='index' ORDER BY name"
@@ -185,10 +185,11 @@ def verify_database() -> dict[str, Any]:
         }
         for table in tables:
             sql = known_tables.get(table)
-            if not sql:
+            if sql is None:
                 continue
-            cnt_row = conn.execute(sql).fetchone()
-            counts[table] = int(cnt_row[0]) if cnt_row else 0
+            row = conn.execute(sql).fetchone()
+            count: int = row[0] if row is not None else 0
+            counts[table] = count
 
         return {
             "database_path": db_path,
@@ -228,7 +229,8 @@ def get_or_create_server(ip_address: str, hostname: str | None = None) -> int:
             (ip_address,),
         )
 
-        return int(result["id"])
+        server_id: int = result["id"]
+        return server_id
 
 
 def insert_health_measurement(
@@ -403,10 +405,10 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
         if not result:
             return {}
 
-        server_id = result["id"]
+        server_id: int = result["id"]
 
         # Count successful measurements
-        measurement_count = conn.execute(
+        row = conn.execute(
             """
             SELECT COUNT(*) as count
             FROM health_measurements
@@ -414,10 +416,11 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
               AND timestamp >= datetime('now', '-' || ? || ' hours')
         """,
             (server_id, hours),
-        ).fetchone()["count"]
+        ).fetchone()
+        measurement_count: int = row["count"] if row is not None else 0
 
         # Count timeouts
-        timeout_count = conn.execute(
+        row = conn.execute(
             """
             SELECT COUNT(*) as count
             FROM icmp_events
@@ -426,7 +429,8 @@ def get_server_stats(ip_address: str, hours: int = 24) -> dict[str, Any]:
               AND timestamp >= datetime('now', '-' || ? || ' hours')
         """,
             (server_id, hours),
-        ).fetchone()["count"]
+        ).fetchone()
+        timeout_count: int = row["count"] if row is not None else 0
 
         # Calculate averages
         stats = conn.execute(
@@ -535,9 +539,9 @@ def cleanup_old_data(days: int) -> dict[str, int]:
         conn.execute("VACUUM")
 
         return {
-            "health_measurements": int(health_deleted),
-            "icmp_events": int(events_deleted),
-            "timestamp_measurements": int(timestamp_deleted),
+            "health_measurements": health_deleted,
+            "icmp_events": events_deleted,
+            "timestamp_measurements": timestamp_deleted,
         }
 
 

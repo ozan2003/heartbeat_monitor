@@ -121,17 +121,17 @@ def discover_config_path(explicit: str | None = None) -> Path | None:
     candidate_paths: list[Path] = []
 
     # 1) explicit
-    if explicit:
+    if explicit is not None:
         candidate_paths.append(Path(explicit).expanduser())
 
     # 2) env variable
     env_path = os.environ.get("HEARTBEAT_MONITOR_CONFIG")
-    if env_path:
+    if env_path is not None:
         candidate_paths.append(Path(env_path).expanduser())
 
     # 3) XDG config home
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    if xdg_config_home:
+    if xdg_config_home is not None:
         candidate_paths.append(
             Path(xdg_config_home).expanduser() / "heartbeat_monitor" / "config.toml"
         )
@@ -177,7 +177,7 @@ def load_config(explicit_path: str | None = None) -> ClientConfig:
         A validated `ClientConfig` instance.
     """
     path = discover_config_path(explicit_path)
-    if not path:
+    if path is None:
         return ClientConfig()
 
     toml_config = _load_toml(path)
