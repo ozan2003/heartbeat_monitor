@@ -1,19 +1,27 @@
-# Heartbeat Monitor - TOML Configuration
+# Heartbeat Monitor - Config File
 
-This document describes the TOML configuration format for the Heartbeat Monitor.
+This document defines the TOML config file for Heartbeat Monitor.
 
-The application reads configuration from a TOML file. If an explicit path is not provided, the file is discovered using the following precedence (first match wins):
+## Config file locations
 
-1) Explicit path provided by the user
-2) Environment variable `HEARTBEAT_MONITOR_CONFIG`
-3) `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
-4) `~/.config/heartbeat_monitor/config.toml`
-5) `./config.toml` (current working directory)
-6) `/etc/heartbeat_monitor/config.toml`
+If you do not give a path, the application looks for the config file in this order. It uses the first file that exists:
 
-Note: The file must be valid TOML.
+1. The path you give with `--config`
+2. `$HEARTBEAT_MONITOR_CONFIG` (an environment variable)
+3. `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
+4. `~/.config/heartbeat_monitor/config.toml`
+5. `./config.toml`
+6. `/etc/heartbeat_monitor/config.toml`
 
-## Quick start (minimal example)
+Set the environment variable like this:
+
+```bash
+export HEARTBEAT_MONITOR_CONFIG="/absolute/path/to/config.toml"
+```
+
+The file must be valid TOML.
+
+## Quick start
 
 ```toml
 # config.toml (minimal)
@@ -62,57 +70,41 @@ max_size_mb = 10
 backup_count = 5
 ```
 
-## Schema reference
+## Options
 
 ### [database]
 
-- path (string, optional): path to the database file
-- cleanup_days (integer, optional): number of days to keep old data (default: 30)
+- `path` (string, optional): the path to the database file.
+- `cleanup_days` (integer, optional): the number of days to keep data. Default: 30.
 
 ### [monitoring]
 
-- interval (float, optional): probe interval in seconds (default: 5.0)
-- timeout (float, optional): per-request timeout in seconds (default: 1.0)
+- `interval` (float, optional): the probe interval in seconds. Default: 5.0.
+- `timeout` (float, optional): the per-request timeout in seconds. Default: 1.0.
 
-### [[servers]] (array of tables)
+### [[servers]]
 
-- ip (string): IP address of the server
-- hostname (string, optional): hostname of the server
-- description (string, optional): description of the server
+Repeat this table to declare more than one server.
 
-Repeat `[[servers]]` to declare multiple servers.
+- `ip` (string): the IP address of the server.
+- `hostname` (string, optional): the hostname of the server.
+- `description` (string, optional): a note about the server.
 
 ### [logging]
 
-- level (string, optional): logging level (default: "INFO")
-- file (string, optional): path to the log file
-- max_size_mb (integer, optional): maximum size of the log file in megabytes (default: 10)
-- backup_count (integer, optional): number of backup files to keep (default: 5)
+- `level` (string, optional): the logging level. Default: `"INFO"`.
+- `file` (string, optional): the path to the log file.
+- `max_size_mb` (integer, optional): the maximum size of one log file in megabytes. Default: 10.
+- `backup_count` (integer, optional): the number of rotated log files to keep. Default: 5.
 
-## Configuration file locations and precedence
+## Validation
 
-The application looks for the configuration in this order:
+The application checks these rules when it loads the config file. A bad value stops the application.
 
-1) Explicit path (if the user supplies one)
-2) `$HEARTBEAT_MONITOR_CONFIG` (environment variable)
-3) `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
-4) `~/.config/heartbeat_monitor/config.toml`
-5) `./config.toml`
-6) `/etc/heartbeat_monitor/config.toml`
-
-To set an explicit path via environment variable:
-
-```bash
-export HEARTBEAT_MONITOR_CONFIG="/absolute/path/to/config.toml"
-```
-
-## Validation rules
-
-- All numeric constraints are enforced at load time; invalid values cause a failure to load the configuration.
-- Intervals and timeouts must be strictly greater than 0.
-- Counts and sizes that are documented as ">= 0" accept zero; negative values are invalid.
-- Server entries require an `ip` value.
+- Intervals and timeouts must be greater than 0.
+- Counts and sizes must be 0 or more. Negative values are invalid.
+- Each server entry must have an `ip` value.
 
 ## Notes
 
-- Omitted sections/fields use their documented defaults.
+- Options that you omit use the documented defaults.

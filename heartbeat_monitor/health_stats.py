@@ -1,9 +1,7 @@
-"""Gather system health metrics from the OS.
+"""Gather system health metrics with psutil.
 
-It does:
-    - Get system stats.
-    - Abstracts OS differences (psutil handles cross-platform)
-    - Returns current health metrics
+psutil hides the differences between operating systems. The functions return
+CPU, memory, and disk usage, and a snapshot that groups all three.
 """
 
 from typing import NamedTuple, TypedDict

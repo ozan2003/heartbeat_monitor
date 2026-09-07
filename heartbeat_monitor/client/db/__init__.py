@@ -1,10 +1,8 @@
-"""Client database services.
+"""SQLite persistence for the client.
 
-Every client has its own database file, named `heartbeat_monitor.db` in the current directory.
-
-This package provides the SQLite persistence layer used by the client to
-store monitoring results. It re-exports the public API from `db.py` so
-it can be imported from `heartbeat_monitor.client.db` directly.
+The client stores its monitoring results in a database file named
+`heartbeat_monitor.db`. This package re-exports the public API from `db.py`,
+so you can import it from `heartbeat_monitor.client.db` directly.
 
 Public API:
 - Connection helpers: `get_thread_connection`, `get_db_connection`, `close_thread_connection`

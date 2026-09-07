@@ -220,3 +220,5 @@ __marimo__/
 *.db-journal
 *.db-wal
 *.db-shm
+
+.ooda/

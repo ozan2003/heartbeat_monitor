@@ -1,15 +1,13 @@
-"""An ICMP server that listens and responds with health data.
+"""An ICMP server that replies with health data.
 
-It opens a ICMP socket, listens in an infinite loop for
-incoming ICMP Echo Request packets.
+The server opens a raw ICMP socket and waits for echo requests. For each
+request it:
+    - Parses the packet to read the id and sequence number.
+    - Gathers the health data of this host.
+    - Builds an echo reply with the health data in the payload.
+    - Sends the reply back to the client.
 
-When it receives a request:
-    - Parses the packet (extract id, sequence number, any payload)
-    - Gathers system health metrics (calls functions from health.py)
-    - Builds ICMP Echo Reply with health data in payload (uses icmp_packet.py)
-    - Sends reply back to client
-
-It also handles errors (malformed packets, socket errors).
+It ignores malformed packets and socket errors.
 """
 
 from __future__ import annotations

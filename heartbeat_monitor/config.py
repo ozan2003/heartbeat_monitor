@@ -1,14 +1,16 @@
 # ruff: noqa: N805
-"""Typed configuration loader for the heartbeat monitor.
+"""Load and validate the TOML config file for the heartbeat monitor.
 
-Loads configuration exclusively from a TOML file.
+If you give a path, the loader uses it. If you do not, it checks these
+locations in order and uses the first file that exists:
 
-If a config file path is not explicitly provided, discovery checks these
-locations in order:
   - `$HEARTBEAT_MONITOR_CONFIG`
-  - `./config.toml`
+  - `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
   - `~/.config/heartbeat_monitor/config.toml`
+  - `./config.toml`
   - `/etc/heartbeat_monitor/config.toml`
+
+The loader validates the file with pydantic and returns a `ClientConfig`.
 """
 
 from __future__ import annotations

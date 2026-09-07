@@ -1,15 +1,15 @@
-"""Client database services.
+"""SQLite persistence for the client.
 
-This module implements the SQLite persistence layer used by the client to store
-monitoring results:
+This module stores three kinds of data:
 - Health measurements (latency and resource usage)
 - ICMP events (timeouts and errors)
 - Timestamp measurements (for clock skew tracking)
 
 Design:
-- One connection per thread via thread-local storage for safe concurrent writes
-- WAL journaling mode with autocommit for balanced durability and performance
-- Schema defined in `db_schema.sql` (same directory), applied by `init_database()`
+- One connection per thread, held in thread-local storage.
+- WAL journaling mode.
+- The schema lives in `db_schema.sql` in the same directory. `init_database()`
+  applies it.
 
 Example usage:
     >>> from heartbeat_monitor.client.db import (

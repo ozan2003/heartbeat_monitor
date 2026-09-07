@@ -1,18 +1,16 @@
-"""The monitoring client that probes servers and displays results.
+"""The monitoring client.
 
-Reads server list from config (or hardcoded initially)
-and opens raw ICMP socket.
+The client reads the list of servers from the config file or the command
+line. It opens a raw ICMP socket and probes each server in a loop.
 
-In a loop:
-    - Sends ICMP Echo Request to each server
-    - Waits for reply with timeout
-    - Parses reply to extract health metrics
-    - Displays current status (or saves to file/db)
-    - Sleeps for poll interval
-    - Handles ICMP errors (unreachable, time exceeded, etc)
+For each server it:
+    - Sends an ICMP echo request.
+    - Waits for a reply within the timeout.
+    - Reads the health data from the reply.
+    - Saves the health data to the database.
+    - Logs ICMP errors and timeouts.
 
-
-It also handles timeouts (server down/unreachable).
+It sleeps for the poll interval between rounds.
 """
 
 from __future__ import annotations

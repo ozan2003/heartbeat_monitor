@@ -10,75 +10,73 @@
 [![Lines of Code](https://tokei.rs/b1/github/ozan2003/heartbeat_monitor?style=flat)](https://github.com/ozan2003/heartbeat_monitor?style=flat)
 [![Code Size](https://img.shields.io/github/languages/code-size/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor)
 
-Lightweight ICMP-based client–server system monitor with configurable probes, network-wide coverage, and local storage.
+A small ICMP client-server system monitor. It probes servers over the network, reads their CPU, memory, and disk usage, and stores the results in a local database.
 
 ## Overview
 
-This project provides a lightweight way to monitor system health metrics of multiple servers
-(CPU, memory, disk usage) over a network using custom ICMP echo requests and replies. It consists of:
+The system has two parts:
 
-- **ICMP Server**: Listens for ICMP echo requests and responds with encoded system health data.
-- **ICMP Client**: Periodically sends ICMP echo requests to servers, parses replies and saves the results to a database.
+- **ICMP Server**: Listens for ICMP echo requests. It replies with the health data of the host it runs on.
+- **ICMP Client**: Sends an ICMP echo request to each server at an interval. It reads the reply and stores the result.
+
+The client and server exchange health data in the payload of ICMP echo packets. The format is defined in `HBM_PAYLOAD.md`.
 
 ## Features
 
-- Uses raw ICMP sockets for communication.
-- Encodes system health metrics in ICMP payloads.
-- Cross-platform system stats via `psutil`.
-- Handles timeouts and ICMP errors gracefully.
+- Raw ICMP sockets
+- Health data encoded in ICMP payloads
+- Cross-platform metrics with `psutil`
+- Timeout and ICMP error handling
 
 ## Database
 
-The app saves a small database file so you can look back at past checks.
+The client stores its results in a SQLite database file named `heartbeat_monitor.db`.
 
-- **What is stored**: A list of servers, recent health checks (speed and usage), and any ICMP connection problems.
-- **Where it is**: Its located in the same directory as the client script.
-- **Do I need to set it up?** No. The file is created automatically when you run the client.
-- **Time zone**: All times are in UTC.
-- **Start fresh**: Close the app and delete the database file.
-- **Back up**: Copy that `.db` file while the app is closed; restore by replacing it with your copy.
+- **Stored data**: servers, health measurements, and ICMP events.
+- **Location**: next to the client module. You can change it with `database.path` in the config file.
+- **Setup**: none. The client creates the file on the first run.
+- **Time zone**: UTC.
+- **Reset**: stop the client and delete the file.
+- **Backup**: copy the file while the client is stopped.
 
 ## Requirements
 
 - Python 3.12+
-- `psutil` library
+- `psutil`
 - SQLite
 
 ## Usage
 
-For Linux systems, you may need to disable kernel ICMP echo requests so
-the server and client can receive echo requests with the correct payload.
-You can do so by running: `sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1`
+The client and server open raw ICMP sockets. They need root privileges on Linux and administrator privileges on Windows.
 
-Note: Opening raw ICMP sockets requires elevated privileges (root/admin) or the `CAP_NET_RAW` capability on Linux.
+On Linux, the kernel can reply to echo requests before your server does. Disable that reply:
 
-### Server
+```bash
+sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1
+```
 
-Run the server with root privileges:
+### Run the server
 
 ```bash
 sudo python -m heartbeat_monitor.server.server
 ```
 
-### Client
-
-Run the client with root privileges, specifying the config file:
+### Run the client
 
 ```bash
 sudo python -m heartbeat_monitor.client.client --config ./config.toml
 ```
 
-## Configuration
+If you omit `--config`, the client looks for the config file in this order:
 
-- Config file discovery (if `--config` is not provided):
-  1. `$HEARTBEAT_MONITOR_CONFIG`
-  2. XDG config home: `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
-  3. `./config.toml`
-  4. `~/.config/heartbeat_monitor/config.toml`
-  5. `/etc/heartbeat_monitor/config.toml`
+1. `$HEARTBEAT_MONITOR_CONFIG`
+2. `$XDG_CONFIG_HOME/heartbeat_monitor/config.toml`
+3. `~/.config/heartbeat_monitor/config.toml`
+4. `./config.toml`
+5. `/etc/heartbeat_monitor/config.toml`
 
-- Precedence: CLI arguments > config file > built-in defaults.
+Command-line options override the config file. The config file overrides the built-in defaults.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

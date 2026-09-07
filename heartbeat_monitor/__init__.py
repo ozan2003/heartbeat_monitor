@@ -1,6 +1,7 @@
 """Top-level package for heartbeat_monitor.
 
-Re-exports commonly used interfaces for convenient imports.
+It re-exports the common interfaces so you can import them from the package
+root.
 """
 
 from __future__ import annotations

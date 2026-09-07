@@ -1,29 +1,16 @@
-"""Shared utilities for ICMP packet manipulation.
+"""Build, parse, and verify ICMP packets.
 
-It contains:
-    - Functions to build ICMP packets (header + payload)
-    - Functions to parse received ICMP packets
-    - Calculate ICMP checksum (critical - packets rejected if wrong)
-    - Encode/decode health metrics into/from binary format
+The module also encodes and decodes the health payload that the client and
+server exchange. The payload format is documented in `HBM_PAYLOAD.md`.
 
-Binary health monitoring format:
-    - Magic bytes (3 bytes): 'HBM' - identifies our protocol
-    - Version (1 byte): Protocol version
-    - Timestamp (8 bytes double): Unix timestamp when data was gathered
-    - CPU percent (4 bytes float): CPU usage percentage
-    - Memory percent (4 bytes float): Memory usage percentage
-    - Memory available MB (4 bytes float): Available memory in MB
-    - Disk percent (4 bytes float): Disk usage percentage
-
-Format string: '!B3sdffff'
-    - ! = network byte order (big-endian)
-    - B = 1 byte unsigned char (version)
-    - 3s = 3 bytes string (magic)
-    - d = 8 bytes double (timestamp)
-    - f = 4 bytes float (cpu)
-    - f = 4 bytes float (memory percent)
-    - f = 4 bytes float (memory available)
-    - f = 4 bytes float (disk)
+Payload layout (`!B3sdffff`, 28 bytes, big-endian):
+    - Version: 1 byte
+    - Magic: 3 bytes (`HBM`)
+    - Timestamp: 8-byte double
+    - CPU percent: 4-byte float
+    - Memory percent: 4-byte float
+    - Memory available MB: 4-byte float
+    - Disk percent: 4-byte float
 """
 
 from __future__ import annotations
@@ -48,15 +35,10 @@ HEALTH_SIZE: Final[int] = HEALTH_STRUCT.size
 VERSION: Final[int] = 2  # Protocol version for payload format
 MAGIC: Final[bytes] = b"HBM"  # Magic bytes to identify our protocol in payload
 
-"""
-ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
-                    rest-of-header (4 bytes)
-
-Checksum, ID and sequence numbers matter for echo requests/replies.
-Other message types use the 4-byte rest-of-header interpreted differently.
-
-See RFC 792 for details.
-"""
+# ICMP packet format: type (1 byte), code (1 byte), checksum (2 bytes),
+# rest-of-header (4 bytes). Checksum, ID and sequence numbers matter for
+# echo requests and replies. Other message types interpret the 4-byte
+# rest-of-header differently. See RFC 792 for details.
 ICMP_FMT: Final[str] = "!BBH4s"
 ICMP_STRUCT: Final[struct.Struct] = struct.Struct(ICMP_FMT)
 ICMP_SIZE: Final[int] = ICMP_STRUCT.size
@@ -67,18 +49,13 @@ _IPV4_PACKET_MAX_TOTAL_LENGTH: Final[int] = 2**16 - 1
 
 # Constants for ICMP
 ICMP_PROTO: Final[int] = socket.IPPROTO_ICMP
-"""
-IPv4 sizing assumptions:
-- _IPV4_MIN_HEADER_SIZE is 20 bytes when no IP options are present (IHL = 5).
-
-- ICMP_MAX_SEGMENT_NO_IP_OPTIONS is the maximum ICMP bytes (header + payload)
-  that still fit under the IPv4 Total Length limit (65535) with a 20-byte IP header.
-
-- ICMP_MAX_PAYLOAD_NO_IP_OPTIONS is just the payload limit; equals 65535 - 20 - 8.
-
-- ICMP_ERROR_MAX_SIZE comes from RFC 1812 and refers to the entire IP packet size;
-  our validation subtracts the IP header to compare against the ICMP segment.
-"""
+# IPv4 sizing assumptions:
+# - _IPV4_MIN_HEADER_SIZE is 20 bytes when IHL = 5 (no IP options).
+# - ICMP_MAX_SEGMENT_NO_IP_OPTIONS is the largest ICMP segment that fits
+#   under the IPv4 total length limit (65535) with a 20-byte IP header.
+# - ICMP_MAX_PAYLOAD_NO_IP_OPTIONS is the payload limit: 65535 - 20 - 8.
+# - ICMP_ERROR_MAX_SIZE comes from RFC 1812 and is the full IP packet size.
+#   The validation subtracts the IP header before it compares.
 ICMP_MAX_SEGMENT_NO_IP_OPTIONS: Final[int] = (
     _IPV4_PACKET_MAX_TOTAL_LENGTH - _IPV4_MIN_HEADER_SIZE
 )
@@ -566,14 +543,14 @@ def verify_checksum(packet: bytes) -> bool:
 def encode_health_data(
     health_dict: HealthSnapshot, *, timestamp: float | None = None
 ) -> bytes:
-    """Encode health metrics into binary payload format using struct.pack.
+    """Encode a health snapshot into the binary payload format.
 
     Args:
-        health_dict: Dictionary containing health metrics from `get_basic_health()`
-        timestamp: Optional timestamp (uses current time if `None`)
+        health_dict: Health data from `get_basic_health()`.
+        timestamp: The capture time in epoch seconds. Defaults to the current time.
 
     Returns:
-        bytes: Binary encoded health data
+        bytes: The binary payload.
     """
     if timestamp is None:
         timestamp = time.time()
@@ -595,16 +572,17 @@ def encode_health_data(
 
 
 def decode_health_data(payload: bytes) -> HealthData:
-    """Decode health metrics from binary payload.
+    """Decode a binary payload into a `HealthData` namedtuple.
 
     Args:
-        payload: Binary payload from ICMP packet
+        payload: The binary payload from an ICMP packet.
 
     Returns:
-        HealthData namedtuple with metrics
+        HealthData: The decoded health metrics.
 
     Raises:
-        ValueError: If payload is invalid (wrong size, magic bytes, or version)
+        ValueError: If the payload is too short, has the wrong magic or version,
+            or holds NaN, infinite, or out-of-range values.
     """
     # Check minimum size
     if len(payload) < HEALTH_SIZE:

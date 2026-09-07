@@ -1,22 +1,22 @@
-# Heartbeat Monitor (HBM) ICMP Payload Specification
+# Heartbeat Monitor Payload Format
 
-This document specifies the binary format used by Heartbeat Monitor for encoding health telemetry inside ICMP Echo packets. The payload is a fixed-size binary struct carried as ICMP data (following the ICMP header).
+This document defines the binary format that Heartbeat Monitor uses to send health data in ICMP echo packets. The payload is 28 bytes and follows the ICMP header.
 
 ## Overview
 
-- **Transport**: ICMP Echo (Request/Reply)
-- **Byte order**: Network byte order (big-endian)
-- **Struct format string**: `!B3sdffff`
-- **Total payload size**: 28 bytes
-- **Magic**: ASCII `HBM` to identify the protocol
+- **Transport**: ICMP echo request and reply
+- **Byte order**: big-endian (network order)
+- **Format string**: `!B3sdffff`
+- **Payload size**: 28 bytes
+- **Magic**: `HBM` (identifies the protocol)
 - **Version**: 2
 
-## Field Layout
+## Field layout
 
 All multi-byte fields are big-endian.
 
 ```text
- 0                   1                   2                   3  
+ 0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |    Version    |      b'H'     |      b'B'     |      b'M'     |
@@ -35,67 +35,68 @@ All multi-byte fields are big-endian.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-Notes:
+- Sizes are in bytes. The total is 28 bytes.
+- The timestamp is a float in seconds since the Unix epoch.
 
-- Sizes are in bytes; totals to 28 bytes.
-- Timestamp is a floating-point in seconds since the Unix epoch.
+## Validation
 
-## Validation Rules
+Before a receiver trusts the data, it must:
 
-Receivers must perform the following checks before trusting the data:
+1. Check that the payload is at least 28 bytes.
+2. Unpack with `!B3sdffff` and check:
+   - `magic == b"HBM"`
+   - `version == 2`
+3. Reject NaN and infinite values.
+4. Reject percentages outside [0, 100].
 
-- Verify payload length is at least 28 bytes.
-- Unpack using `!B3sdffff` and check:
-  - `magic == b"HBM"`
-  - `version == 2` (reject or handle via compatibility policy if different)
-- Treat NaN/Inf floats as invalid data.
-- Percent fields are logically in [0, 100]; implementations may clamp or reject out-of-range values.
+## Versioning
 
-## Versioning and Compatibility
+- `version` is the first byte. A receiver can reject an old format early.
+- A future version must keep the magic bytes and use a new version number. Backward compatibility is not guaranteed.
 
-- `version` is the first byte to allow early gating.
-- Future versions must retain the `magic` and use a distinct `version`. Backward compatibility is not guaranteed unless explicitly stated.
+## ICMP integration
 
-## ICMP Integration
+- The payload is the ICMP echo data. It follows the ICMP header.
+- The ICMP header checksum covers the header and the payload. The payload has no checksum of its own.
+- The echo `id` and `sequence` live in the ICMP header, not in the payload.
 
-- The payload defined here is placed verbatim as the ICMP Echo data.
-- ICMP header checksum covers both header and this payload; there is no additional checksum inside the payload.
-- Echo identifiers (`id`, `sequence`) live in the ICMP header, not in this payload.
-
-## Reference Implementation (Encode/Decode)
+## Reference implementation
 
 ```python
 import math
 import struct
 import time
 
-from heartbeat_monitor.health_stats import HealthData
+from heartbeat_monitor.health_stats import HealthData, HealthSnapshot
 
 HEALTH_FMT = "!B3sdffff"
+HEALTH_STRUCT = struct.Struct(HEALTH_FMT)
+HEALTH_SIZE = HEALTH_STRUCT.size
 MAGIC = b"HBM"
 VERSION = 2
 
 
-def encode_health_data(health: dict, timestamp: float | None = None) -> bytes:
+def encode_health_data(
+    health_dict: HealthSnapshot, *, timestamp: float | None = None
+) -> bytes:
     if timestamp is None:
         timestamp = time.time()
-    return struct.pack(
-        HEALTH_FMT,
+    return HEALTH_STRUCT.pack(
         VERSION,
         MAGIC,
         timestamp,
-        float(health["cpu_percent"]),
-        float(health["memory"]["percent"]),
-        float(health["memory"]["available"]) / (1024 * 1024),
-        float(health["disk"]["percent"]),
+        health_dict["cpu_percent"],
+        health_dict["memory"]["percent"],
+        health_dict["memory"]["available"] / (1024 * 1024),
+        health_dict["disk"]["percent"],
     )
 
 
 def decode_health_data(payload: bytes) -> HealthData:
-    if len(payload) < struct.calcsize(HEALTH_FMT):
+    if len(payload) < HEALTH_SIZE:
         raise ValueError("Invalid payload size")
-    version, magic, ts, cpu, mem_pct, mem_avail_mb, disk = struct.unpack(
-        HEALTH_FMT, payload[: struct.calcsize(HEALTH_FMT)]
+    version, magic, ts, cpu, mem_pct, mem_avail_mb, disk = HEALTH_STRUCT.unpack(
+        payload[:HEALTH_SIZE]
     )
     if magic != MAGIC:
         raise ValueError(f"Invalid magic: {magic!r}")
@@ -116,9 +117,9 @@ def decode_health_data(payload: bytes) -> HealthData:
     )
 ```
 
-### Example Usage with ICMP Echo
+## Example
 
-The payload can be carried within an ICMP Echo Request/Reply.
+The payload travels inside an ICMP echo request or reply.
 
 ```python
 from heartbeat_monitor.icmp_utils import create_echo_request, ICMPTypes
