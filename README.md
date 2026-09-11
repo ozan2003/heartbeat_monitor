@@ -7,7 +7,6 @@
 [![SQLite](https://img.shields.io/badge/SQLite-%2307405e.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/index.html)
 [![Stars](https://img.shields.io/github/stars/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor/commits/master)
-[![Lines of Code](https://tokei.rs/b1/github/ozan2003/heartbeat_monitor?style=flat)](https://github.com/ozan2003/heartbeat_monitor?style=flat)
 [![Code Size](https://img.shields.io/github/languages/code-size/ozan2003/heartbeat_monitor)](https://github.com/ozan2003/heartbeat_monitor)
 
 A small ICMP client-server system monitor. It probes servers over the network, reads their CPU, memory, and disk usage, and stores the results in a local database.

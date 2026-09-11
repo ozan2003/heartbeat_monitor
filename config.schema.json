@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heartbeat Monitor Config",
+  "description": "The JSON Schema for the config file. It matches the `ClientConfig` models in `heartbeat_monitor/config.py`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to the database file. If you omit this key, the program uses the default location."
+        },
+        "cleanup_days": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30,
+          "description": "Number of days to keep data. The default is 30."
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 5.0,
+          "description": "Probe interval, in seconds. The value must be more than 0. The default is 5.0."
+        },
+        "timeout": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1.0,
+          "description": "Timeout for each request, in seconds. The value must be more than 0. The default is 1.0."
+        }
+      }
+    },
+    "servers": {
+      "type": "array",
+      "description": "Servers to probe. Each [[servers]] table describes one server.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ip"
+        ],
+        "properties": {
+          "ip": {
+            "type": "string",
+            "description": "IP address of the server."
+          },
+          "hostname": {
+            "type": "string",
+            "description": "Hostname of the server."
+          },
+          "description": {
+            "type": "string",
+            "description": "A note about the server."
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ],
+          "default": "INFO",
+          "description": "Logging level. The default is INFO."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path to the log file. If you omit this key, the program writes to stdout or stderr."
+        },
+        "max_size_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "Maximum size of one log file, in megabytes. The default is 10."
+        },
+        "backup_count": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 5,
+          "description": "Number of rotated log files to keep. The default is 5."
+        }
+      }
+    }
+  }
+}

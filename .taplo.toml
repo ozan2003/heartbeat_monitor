@@ -1,0 +1,7 @@
+# taplo config. The "Even Better TOML" VS Code extension and the `taplo`
+# CLI read this file. It uses `config.schema.json` to validate and
+# autocomplete `config.toml`.
+include = ["config.toml", "**/config.toml"]
+
+[schema]
+path = "config.schema.json"

@@ -108,3 +108,21 @@ The application checks these rules when it loads the config file. A bad value st
 ## Notes
 
 - Options that you omit use the documented defaults.
+
+## Editor schema
+
+The file `config.schema.json` describes this config file. It uses the JSON Schema
+format. The `.taplo.toml` file connects this schema to the config file.
+
+The "Even Better TOML" extension for VS Code and the `taplo` CLI read the schema.
+They give:
+
+- autocomplete
+- hover documentation
+- inline validation
+
+The validation reports wrong types, unknown keys, out-of-range values, and invalid
+log levels.
+
+`config.schema.json` must match the models in `heartbeat_monitor/config.py`. If you
+add or change an option, you must update the schema.
